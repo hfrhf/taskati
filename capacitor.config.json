@@ -1,6 +1,6 @@
 {
-  "appId": "com.mastaar.app",
-  "appName": "Mastaar",
+  "appId": "com.taskinimurex.app",
+  "appName": "taskinimurex",
   "webDir": "out",
   "server": {
     "url": "https://taskini-murex.vercel.app/",

@@ -1,4 +1,4 @@
-package com.mastaar.app;
+package com.taskinimurex.app;
 
 import com.getcapacitor.BridgeActivity;
 
