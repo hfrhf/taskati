@@ -135,13 +135,6 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
 
   // تفعيل أو إلغاء تفعيل الإشعارات
   const handleNotificationToggle = async () => {
-    // التحقق مما إذا كان التطبيق يعمل داخل Capacitor (بيئة هجينة)
-    const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor;
-    if (isCapacitor) {
-      showToast('إشعارات الويب لا تعمل داخل التطبيقات المعبأة (Capacitor). سيتم دعم الإشعارات الأصلية تلقائياً بمجرد ربط التطبيق بـ Firebase ورفعه للمتاجر.', 'warning');
-      return;
-    }
-
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       showToast('جهازك أو متصفحك الحالي لا يدعم إشعارات الويب اللحظية.', 'warning')
       return
