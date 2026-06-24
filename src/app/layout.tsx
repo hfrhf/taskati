@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Tajawal, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import ChronoWidget from "@/components/ChronoWidget";
 
 const tajawal = Tajawal({
   weight: ["400", "500", "700"],
@@ -107,6 +108,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col selection:bg-theme-accent selection:text-theme-panel">
         {children}
+        <ChronoWidget />
       </body>
     </html>
   );
