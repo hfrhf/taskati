@@ -48,9 +48,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. تجاوز طلبات Next.js الداخلية، وإعادة التحميل الساخن (HMR)، والـ API
+  // 2. تجاوز إعادة التحميل الساخن (HMR)، والـ API
   if (
-    url.pathname.startsWith('/_next') || 
     url.pathname.includes('webpack-hmr') ||
     url.pathname.startsWith('/api')
   ) {
