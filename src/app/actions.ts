@@ -722,7 +722,8 @@ export async function submitDailyStandup(
   progressRate: 'all' | 'most' | 'half' | 'low',
   productivityScore: number,
   dateString: string,
-  milestoneId?: string | null
+  milestoneId?: string | null,
+  workMinutes: number = 0
 ) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -740,6 +741,7 @@ export async function submitDailyStandup(
       progress_rate: progressRate,
       productivity_score: productivityScore,
       milestone_id: milestoneId || null,
+      work_minutes: workMinutes,
       created_at: new Date().toISOString()
     }, {
       onConflict: 'user_id,date'
@@ -943,6 +945,87 @@ export async function deletePushSubscription(endpoint: string) {
 
   if (error) throw new Error(error.message)
   return { success: true }
+}
+
+// جلب التقارير والإحصائيات الشهرية للأعضاء والفريق بالكامل
+export async function getMonthlyAnalytics(month: number, year: number) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = new Date(year, month, 0).getDate()
+  const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+
+  // 1. جلب كافة الأعضاء
+  const { data: teamProfiles, error: profilesError } = await supabase
+    .from('profiles')
+    .select('id, name, email, avatar_url, role')
+    .order('name', { ascending: true })
+
+  if (profilesError) throw new Error(profilesError.message)
+
+  // 2. جلب كافة التقارير اليومية للشهر المحدد
+  const { data: standups, error: standupsError } = await supabase
+    .from('daily_standups')
+    .select('user_id, date, work_minutes, productivity_score')
+    .gte('date', startDate)
+    .lte('date', endDate)
+
+  if (standupsError) throw new Error(standupsError.message)
+
+  // 3. جلب كافة المهام المكتملة في هذا الشهر
+  const { data: tasks, error: tasksError } = await supabase
+    .from('tasks')
+    .select('assigned_to, completed_date, title')
+    .eq('status', 'completed')
+    .gte('completed_date', startDate)
+    .lte('completed_date', endDate)
+
+  if (tasksError) throw new Error(tasksError.message)
+
+  // 4. تجميع البيانات لكل موظف
+  const userStats = (teamProfiles || []).map((u) => {
+    const userStandups = (standups || []).filter((s) => s.user_id === u.id)
+    const userTasks = (tasks || []).filter((t) => t.assigned_to === u.id)
+
+    const totalMinutes = userStandups.reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+    const totalDays = userStandups.length
+    const avgProductivity = totalDays > 0 
+      ? Math.round((userStandups.reduce((sum, s) => sum + s.productivity_score, 0) / totalDays) * 10) / 10
+      : 0
+
+    return {
+      userId: u.id,
+      name: u.name,
+      email: u.email,
+      avatarUrl: u.avatar_url,
+      role: u.role,
+      totalMinutes,
+      totalHours: Math.round((totalMinutes / 60) * 10) / 10,
+      completedTasksCount: userTasks.length,
+      daysLogged: totalDays,
+      avgProductivity,
+      tasks: userTasks.map(t => t.title)
+    }
+  })
+
+  // 5. حساب إجمالي الفريق
+  const teamTotalMinutes = userStats.reduce((sum, u) => sum + u.totalMinutes, 0)
+  const teamCompletedTasks = userStats.reduce((sum, u) => sum + u.completedTasksCount, 0)
+  const loggedUsersCount = userStats.filter(u => u.daysLogged > 0).length
+  const teamAvgProductivity = loggedUsersCount > 0
+    ? Math.round((userStats.filter(u => u.daysLogged > 0).reduce((sum, u) => sum + u.avgProductivity, 0) / loggedUsersCount) * 10) / 10
+    : 0
+
+  return {
+    userStats,
+    teamSummary: {
+      totalHours: Math.round((teamTotalMinutes / 60) * 10) / 10,
+      completedTasksCount: teamCompletedTasks,
+      avgProductivity: teamAvgProductivity
+    }
+  }
 }
 
 

@@ -41,6 +41,7 @@ interface Standup {
   mood: 'energetic' | 'stable' | 'tired' | 'stressed'
   progress_rate: 'all' | 'most' | 'half' | 'low'
   productivity_score: number
+  work_minutes?: number
   created_at: string
   milestone_id?: string | null
   milestone?: {
@@ -100,6 +101,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
   const [progressRate, setProgressRate] = useState<'all' | 'most' | 'half' | 'low'>('most')
   const [productivityScore, setProductivityScore] = useState(5)
   const [hoveredStar, setHoveredStar] = useState<number | null>(null)
+  const [workHours, setWorkHours] = useState<number>(0)
+  const [workMinutes, setWorkMinutes] = useState<number>(0)
   const [isFormVisible, setIsFormVisible] = useState(false)
   const [hasExistingReport, setHasExistingReport] = useState(false)
   const [milestoneId, setMilestoneId] = useState<string>('')
@@ -211,6 +214,9 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
         setProgressRate(myStandup.progress_rate)
         setProductivityScore(myStandup.productivity_score)
         setMilestoneId(myStandup.milestone_id || '')
+        const totalMins = myStandup.work_minutes || 0
+        setWorkHours(Math.floor(totalMins / 60))
+        setWorkMinutes(totalMins % 60)
         setHasExistingReport(true)
       } else {
         // تفريغ النموذج إذا لم يكن هناك تقرير سابق في هذا اليوم
@@ -221,6 +227,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
         setProgressRate('most')
         setProductivityScore(5)
         setMilestoneId('')
+        setWorkHours(0)
+        setWorkMinutes(0)
         setHasExistingReport(false)
       }
     } catch (err: any) {
@@ -243,6 +251,7 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
 
     startTransition(async () => {
       try {
+        const totalMinutes = (workHours * 60) + workMinutes
         await submitDailyStandup(
           todayTasks,
           tomorrowTasks,
@@ -251,7 +260,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
           progressRate,
           productivityScore,
           selectedDate,
-          milestoneId || null
+          milestoneId || null,
+          totalMinutes
         )
         showToast('تم حفظ تحديثك اليومي بنجاح', 'success')
         fetchStandups(selectedDate)
@@ -432,6 +442,43 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                   </div>
                 </div>
 
+                {/* 3.5. عدد ساعات العمل اليومية */}
+                <div className="bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-4 space-y-2">
+                  <label className="block text-xs font-bold text-theme-text">كم عدد ساعات العمل التي قضيتها اليوم؟</label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1 flex items-center gap-2">
+                      <input 
+                        type="number"
+                        min={0}
+                        max={24}
+                        value={workHours || ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0
+                          setWorkHours(Math.min(24, Math.max(0, val)))
+                        }}
+                        className="w-full text-center bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl py-2.5 text-xs transition-all outline-none font-bold"
+                        placeholder="0"
+                      />
+                      <span className="text-xs font-bold text-theme-text-muted">ساعة</span>
+                    </div>
+                    <div className="flex-1 flex items-center gap-2">
+                      <input 
+                        type="number"
+                        min={0}
+                        max={59}
+                        value={workMinutes || ''}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0
+                          setWorkMinutes(Math.min(59, Math.max(0, val)))
+                        }}
+                        className="w-full text-center bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl py-2.5 text-xs transition-all outline-none font-bold"
+                        placeholder="00"
+                      />
+                      <span className="text-xs font-bold text-theme-text-muted">دقيقة</span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* 4. ماذا أنجزت اليوم؟ */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-theme-text">4. ماذا أنجزت اليوم باختصار؟ <span className="text-rose-500">*</span></label>
@@ -603,6 +650,11 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
 
                           {/* شارات الحالة والمزاج */}
                           <div className="flex flex-wrap gap-1.5">
+                            {standup.work_minutes ? (
+                              <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 flex items-center gap-1">
+                                ⏱️ {Math.floor(standup.work_minutes / 60)}س {standup.work_minutes % 60}د
+                              </span>
+                            ) : null}
                             {standup.milestone ? (
                               <span className="text-[9px] font-black px-2 py-1 rounded-lg bg-theme-accent text-theme-panel">
                                 🎯 {standup.milestone.title}

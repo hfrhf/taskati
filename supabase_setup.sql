@@ -248,6 +248,7 @@ create table if not exists public.daily_standups (
   mood text not null default 'stable' check (mood in ('energetic', 'stable', 'tired', 'stressed')),
   progress_rate text not null default 'most' check (progress_rate in ('all', 'most', 'half', 'low')),
   productivity_score integer not null default 5 check (productivity_score between 1 and 5),
+  work_minutes integer not null default 0, -- ساعات العمل بالدقائق
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   unique (user_id, date) -- يمنع تكرار الإدخال للمستخدم في نفس اليوم
 );
