@@ -307,6 +307,10 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                               </span>
                             </h4>
                             <p className="text-[10px] text-theme-text-muted">{u.email}</p>
+                            <p className="text-[10px] font-bold text-theme-text-muted mt-1.5 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-theme-accent"></span>
+                              <span>أيام الحضور والتقرير اليومي: {u.daysLogged} يوم</span>
+                            </p>
                           </div>
                         </div>
 

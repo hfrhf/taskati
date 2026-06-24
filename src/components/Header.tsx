@@ -275,17 +275,6 @@ export default function Header({ user }: HeaderProps) {
               <span>خريطة الطريق</span>
             </Link>
             <Link 
-              href="/analytics" 
-              className={`flex items-center gap-1.5 pb-1 transition-all border-b-2 ${
-                isActive('/analytics') 
-                  ? 'text-theme-text border-theme-accent font-bold' 
-                  : 'text-theme-text-muted hover:text-theme-text border-transparent'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>التقارير والإحصائيات</span>
-            </Link>
-            <Link 
               href="/archive" 
               className={`flex items-center gap-1.5 pb-1 transition-all border-b-2 ${
                 isActive('/archive') 
@@ -476,17 +465,6 @@ export default function Header({ user }: HeaderProps) {
         >
           <TrendingUp className="w-5 h-5 transition-transform duration-300 active:scale-95" />
           <span>الخريطة</span>
-        </Link>
-        <Link 
-          href="/analytics" 
-          className={`flex flex-col items-center gap-1 text-[10px] py-2 px-2.5 rounded-2xl transition-all duration-300 relative ${
-            isActive('/analytics') 
-              ? 'text-theme-accent font-bold bg-theme-accent/10 shadow-sm' 
-              : 'text-theme-text-muted hover:text-theme-text'
-          }`}
-        >
-          <BarChart3 className="w-5 h-5 transition-transform duration-300 active:scale-95" />
-          <span>التقارير</span>
         </Link>
         <Link 
           href="/archive" 
