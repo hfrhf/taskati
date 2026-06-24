@@ -296,7 +296,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                             className="w-10 h-10 rounded-xl object-cover border border-theme-border shrink-0"
                           />
                           <div>
-                            <h4 className="text-xs font-black text-theme-text flex items-center gap-1">
+                            <h4 className="text-xs font-black text-theme-text flex items-center gap-1.5 flex-wrap">
                               <span>{u.name}</span>
                               <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${
                                 u.role === 'admin' 
@@ -305,12 +305,15 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                               }`}>
                                 {u.role === 'admin' ? 'مدير' : 'شريك'}
                               </span>
+                              <span 
+                                className="inline-flex items-center gap-1 text-[9px] font-bold text-theme-accent bg-theme-accent/10 px-1.5 py-0.5 rounded-md border border-theme-accent/20" 
+                                title="أيام الحضور والتقرير اليومي"
+                              >
+                                <Calendar className="w-3.5 h-3.5 text-theme-accent" />
+                                <span>{u.daysLogged}</span>
+                              </span>
                             </h4>
                             <p className="text-[10px] text-theme-text-muted">{u.email}</p>
-                            <p className="text-[10px] font-bold text-theme-text-muted mt-1.5 flex items-center gap-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-theme-accent"></span>
-                              <span>أيام الحضور والتقرير اليومي: {u.daysLogged} يوم</span>
-                            </p>
                           </div>
                         </div>
 
