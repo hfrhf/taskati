@@ -213,10 +213,11 @@ export default function Header({ user }: HeaderProps) {
     const form = e.currentTarget
     const formData = new FormData(form)
     const name = formData.get('name') as string
+    const password = formData.get('password') as string
 
     try {
       setIsPending(true)
-      const res = await updateProfile(name, formData)
+      const res = await updateProfile(name, formData, password)
       if (res.success) {
         setIsProfileModalOpen(false)
         window.location.reload() // تحديث الصفحة لتظهر الصورة والاسم الجديدين في كل مكان
@@ -514,6 +515,17 @@ export default function Header({ user }: HeaderProps) {
                     className="flex-1 bg-theme-input border border-theme-border focus:border-theme-accent text-theme-text rounded-xl px-3 py-2 text-base md:text-xs transition-all outline-none file:bg-theme-accent file:text-theme-panel file:border-0 file:rounded-lg file:px-3 file:py-1.5 file:ml-3 file:text-[10px] file:font-bold file:cursor-pointer cursor-pointer"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">كلمة مرور جديدة (اختياري)</label>
+                <input 
+                  type="password" 
+                  name="password" 
+                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-base md:text-xs transition-all outline-none text-left" 
+                  placeholder="اتركها فارغة إذا لم تكن تريد تغييرها"
+                  minLength={6}
+                />
               </div>
 
               <div className="pt-2">

@@ -593,10 +593,20 @@ export async function uploadTaskFile(taskId: string, formData: FormData) {
 }
 
 // تحديث بيانات الملف الشخصي (الاسم والأفاتار) للمستخدم الحالي
-export async function updateProfile(name: string, formData?: FormData) {
+export async function updateProfile(name: string, formData?: FormData, newPassword?: string) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('غير مصرح بالدخول')
+
+  if (newPassword && newPassword.trim().length > 0) {
+    if (newPassword.trim().length < 6) {
+      throw new Error('يجب أن تكون كلمة المرور 6 أحرف على الأقل')
+    }
+    const { error: passError } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+    if (passError) throw new Error(passError.message)
+  }
 
   let avatarUrl = null
   
