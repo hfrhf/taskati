@@ -34,61 +34,116 @@ export default function Header({ user }: HeaderProps) {
   // حالات PWA وتثبيت التطبيق
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
   const [isIOS, setIsIOS] = useState(false)
-  const [isInstalled, setIsInstalled] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(true) // نبدأ بـ true (مخفي) افتراضياً للأندرويد حتى يثبت العكس
   const [installErrorModalOpen, setInstallErrorModalOpen] = useState(false)
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('taskini-theme') || 'light'
     setActiveTheme(savedTheme)
 
-    // التحقق مما إذا كان التطبيق يعمل حالياً في وضع Standalone (تطبيق مثبت)
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone
-    console.log('[PWA Header] isStandalone:', isStandalone)
-    if (isStandalone) {
-      setIsInstalled(true)
-    }
-
     // التحقق مما إذا كان نظام التشغيل iOS
     const userAgent = window.navigator.userAgent.toLowerCase()
     const iosMatch = /iphone|ipad|ipod/.test(userAgent)
     setIsIOS(iosMatch)
 
-    // فحص فوري لما إذا كان حدث التثبيت ممسوكاً مسبقاً في الـ window
-    const winPrompt = (window as any).deferredPrompt
-    console.log('[PWA Header] Initial window.deferredPrompt check:', winPrompt ? 'EXISTS' : 'NULL')
-    if (winPrompt) {
-      setDeferredPrompt(winPrompt)
-      setIsInstalled(false)
+    const checkStatus = async () => {
+      // 1. التحقق مما إذا كان التطبيق يعمل حالياً في وضع Standalone (تطبيق مثبت ومفتوح)
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone
+      console.log('[PWA Header] checkStatus isStandalone:', isStandalone)
+      if (isStandalone) {
+        setIsInstalled(true)
+        try {
+          localStorage.setItem('pwa-installed', 'true')
+        } catch (e) {}
+        return
+      }
+
+      // 2. التحقق عبر getInstalledRelatedApps إذا كان مدعوماً في المتصفح
+      if ('navigator' in window && 'getInstalledRelatedApps' in navigator) {
+        try {
+          const apps = await (navigator as any).getInstalledRelatedApps()
+          console.log('[PWA Header] getInstalledRelatedApps apps:', apps)
+          if (apps && apps.length > 0) {
+            setIsInstalled(true)
+            try {
+              localStorage.setItem('pwa-installed', 'true')
+            } catch (e) {}
+            return
+          }
+        } catch (err) {
+          console.warn('[PWA Header] getInstalledRelatedApps error:', err)
+        }
+      }
+
+      // 3. التحقق من علامة localStorage
+      try {
+        const localVal = localStorage.getItem('pwa-installed')
+        if (localVal === 'true') {
+          setIsInstalled(true)
+          return
+        }
+      } catch (e) {}
+
+      // 4. إذا لم يكن مثبتاً بأي طريقة أعلاه:
+      if (iosMatch) {
+        // في الآيفون، نظهر الزر دائماً لأن حدث beforeinstallprompt لا يعمل هناك، ونحتاج لتوجيههم يدوياً
+        setIsInstalled(false)
+      } else {
+        // في الأندرويد/الكمبيوتر: نفحص ما إذا كان الحدث قد تم التقاطه مسبقاً في الـ window
+        const winPrompt = (window as any).deferredPrompt
+        console.log('[PWA Header] Initial window.deferredPrompt check:', winPrompt ? 'EXISTS' : 'NULL')
+        if (winPrompt) {
+          setDeferredPrompt(winPrompt)
+          setIsInstalled(false) // إظهار الزر لأن المتصفح أخبرنا أنه غير مثبت ومتاح للتثبيت
+        } else {
+          // إذا لم يتم التقاطه بعد، نترك الزر مخفياً حتى يطلق المتصفح الحدث
+          setIsInstalled(true)
+        }
+      }
     }
 
-    // الاستماع لحدث التثبيت الأصلي من المتصفح
+    checkStatus()
+
+    // الاستماع لحدث التثبيت الأصلي من المتصفح (يطلق فقط إذا كان التطبيق غير مثبت)
     const handleBeforeInstallPrompt = (e: Event) => {
       console.log('[PWA Header] Caught native beforeinstallprompt event')
       e.preventDefault()
       setDeferredPrompt(e)
-      setIsInstalled(false)
+      setIsInstalled(false) // إظهار الزر فوراً بمجرد تفعيل المتصفح لإمكانية التثبيت
+      try {
+        localStorage.setItem('pwa-installed', 'false')
+      } catch (err) {}
     }
 
     // الاستماع للحدث المخصص المبثوث من الـ layout
     const handleCustomPromptNotification = (e: any) => {
       console.log('[PWA Header] Caught custom pwa-prompt-available event. Detail:', e.detail ? 'EXISTS' : 'NULL')
       setDeferredPrompt(e.detail)
-      setIsInstalled(false)
+      setIsInstalled(false) // إظهار الزر
+      try {
+        localStorage.setItem('pwa-installed', 'false')
+      } catch (err) {}
     }
 
     // الاستماع لاكتمال التثبيت
     const handleAppInstalled = () => {
       console.log('[PWA Header] Caught native appinstalled event')
-      setIsInstalled(true)
+      setIsInstalled(true) // إخفاء الزر فوراً بعد اكتمال التثبيت
       setDeferredPrompt(null)
       delete (window as any).deferredPrompt
+      try {
+        localStorage.setItem('pwa-installed', 'true')
+      } catch (err) {}
     }
 
     const handleCustomInstalledStatus = (e: any) => {
       console.log('[PWA Header] Caught custom pwa-installed-status event. Detail:', e.detail)
       if (e.detail) {
-        setIsInstalled(true)
+        setIsInstalled(true) // إخفاء الزر
         setDeferredPrompt(null)
+        try {
+          localStorage.setItem('pwa-installed', 'true')
+        } catch (err) {}
       }
     }
 
