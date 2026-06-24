@@ -41,68 +41,49 @@ export default function Header({ user }: HeaderProps) {
     const savedTheme = localStorage.getItem('taskini-theme') || 'light'
     setActiveTheme(savedTheme)
 
-    // التحقق من حالة التثبيت المحفوظة في التخزين المحلي أو وضع التشغيل المستقل
-    const storedInstalled = localStorage.getItem('pwa-installed') === 'true'
+    // التحقق مما إذا كان التطبيق يعمل حالياً في وضع Standalone (تطبيق مثبت)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone
-    
-    console.log('[PWA Header] storedInstalled:', storedInstalled, 'isStandalone:', isStandalone)
-    
-    if (storedInstalled || isStandalone) {
+    console.log('[PWA Header] isStandalone:', isStandalone)
+    if (isStandalone) {
       setIsInstalled(true)
     }
 
-    // التحقق من التطبيقات المثبتة مسبقاً (في المتصفحات المدعومة) كعامل احتياطي
-    if ('getInstalledRelatedApps' in navigator) {
-      (navigator as any).getInstalledRelatedApps().then((relatedApps: any[]) => {
-        console.log('[PWA Header] getInstalledRelatedApps:', relatedApps)
-        if (relatedApps && relatedApps.length > 0) {
-          setIsInstalled(true)
-          localStorage.setItem('pwa-installed', 'true')
-        }
-      }).catch(console.error)
-    }
-
-    // التحقق مما إذا كان نظام التشغيل iOS (أيفون/أيباد)
+    // التحقق مما إذا كان نظام التشغيل iOS
     const userAgent = window.navigator.userAgent.toLowerCase()
     const iosMatch = /iphone|ipad|ipod/.test(userAgent)
     setIsIOS(iosMatch)
 
-    // التحقق مما إذا تم التقاط الحدث مسبقاً على مستوى النافذة
+    // فحص فوري لما إذا كان حدث التثبيت ممسوكاً مسبقاً في الـ window
     const winPrompt = (window as any).deferredPrompt
     console.log('[PWA Header] Initial window.deferredPrompt check:', winPrompt ? 'EXISTS' : 'NULL')
     if (winPrompt) {
       setDeferredPrompt(winPrompt)
       setIsInstalled(false)
-      localStorage.setItem('pwa-installed', 'false')
     }
 
-    // الاستماع لطلب التثبيت من المتصفح
+    // الاستماع لحدث التثبيت الأصلي من المتصفح
     const handleBeforeInstallPrompt = (e: Event) => {
       console.log('[PWA Header] Caught native beforeinstallprompt event')
       e.preventDefault()
       setDeferredPrompt(e)
       setIsInstalled(false)
-      localStorage.setItem('pwa-installed', 'false')
     }
 
-    // الاستماع للحدث المخصص الموجه من الصفحة الرئيسية
+    // الاستماع للحدث المخصص المبثوث من الـ layout
     const handleCustomPromptNotification = (e: any) => {
       console.log('[PWA Header] Caught custom pwa-prompt-available event. Detail:', e.detail ? 'EXISTS' : 'NULL')
       setDeferredPrompt(e.detail)
       setIsInstalled(false)
-      localStorage.setItem('pwa-installed', 'false')
     }
 
-    // الاستماع لحدث اكتمال التثبيت
+    // الاستماع لاكتمال التثبيت
     const handleAppInstalled = () => {
       console.log('[PWA Header] Caught native appinstalled event')
       setIsInstalled(true)
-      localStorage.setItem('pwa-installed', 'true')
       setDeferredPrompt(null)
       delete (window as any).deferredPrompt
     }
 
-    // الاستماع للحدث المخصص لاكتمال التثبيت الموجه من الـ layout
     const handleCustomInstalledStatus = (e: any) => {
       console.log('[PWA Header] Caught custom pwa-installed-status event. Detail:', e.detail)
       if (e.detail) {
@@ -127,29 +108,35 @@ export default function Header({ user }: HeaderProps) {
   const handleInstallApp = async () => {
     const promptEvent = deferredPrompt || (window as any).deferredPrompt
     console.log('[PWA Header] handleInstallApp called. Event exists?', !!promptEvent)
-    if (!promptEvent) return
+    
+    if (!promptEvent) {
+      console.log('[PWA Header] No prompt event available. Showing manual install guide modal');
+      setInstallErrorModalOpen(true)
+      setIsUserMenuOpen(false)
+      return
+    }
     
     try {
-      console.log('[PWA Header] Calling promptEvent.prompt()')
-      // إظهار نافذة تثبيت التطبيق الرسمية للمتصفح
+      console.log('[PWA Header] Triggering PWA installation prompt...')
       await promptEvent.prompt()
       
-      // انتظار خيار المستخدم
       const { outcome } = await promptEvent.userChoice
       console.log('[PWA Header] User choice outcome:', outcome)
       
       if (outcome === 'accepted') {
         setIsInstalled(true)
-        localStorage.setItem('pwa-installed', 'true')
+        try {
+          localStorage.setItem('pwa-installed', 'true')
+        } catch (e) {}
       }
       
-      // مسح المانيفست المؤجل
       setDeferredPrompt(null)
       delete (window as any).deferredPrompt
       setIsUserMenuOpen(false)
     } catch (err) {
-      console.error('[PWA Header] Failed to open install window:', err)
+      console.error('[PWA Header] Failed to open native install prompt:', err)
       setInstallErrorModalOpen(true)
+      setIsUserMenuOpen(false)
     }
   }
 
@@ -308,30 +295,18 @@ export default function Header({ user }: HeaderProps) {
 
                     {/* خيار تثبيت التطبيق PWA */}
                     {!isInstalled && (
-                      <>
-                        <button
-                          onClick={() => {
-                            const promptEvent = deferredPrompt || (window as any).deferredPrompt;
-                            console.log('[PWA Header Button] Clicked. deferredPrompt state:', deferredPrompt ? 'EXISTS' : 'NULL', 'window.deferredPrompt:', (window as any).deferredPrompt ? 'EXISTS' : 'NULL');
-                            if (promptEvent) {
-                              handleInstallApp()
-                            } else {
-                              console.log('[PWA Header Button] No prompt event available. Showing error modal');
-                              setInstallErrorModalOpen(true)
-                              setIsUserMenuOpen(false)
-                            }
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-theme-text hover:bg-theme-bg cursor-pointer transition-colors text-right border-t border-theme-border/50 pt-2 group"
-                        >
-                          <div className="bg-emerald-500/10 p-1.5 rounded-lg group-hover:bg-emerald-500/20 transition-colors">
-                            <Download className="w-3.5 h-3.5 text-emerald-500" />
-                          </div>
-                          <div className="flex flex-col text-right">
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">تحميل التطبيق مباشرة</span>
-                            <span className="text-[9px] text-theme-text-muted mt-0.5">تثبيت بنقرة واحدة</span>
-                          </div>
-                        </button>
-                      </>
+                      <button
+                        onClick={handleInstallApp}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-theme-text hover:bg-theme-bg cursor-pointer transition-colors text-right border-t border-theme-border/50 pt-2 group"
+                      >
+                        <div className="bg-emerald-500/10 p-1.5 rounded-lg group-hover:bg-emerald-500/20 transition-colors">
+                          <Download className="w-3.5 h-3.5 text-emerald-500" />
+                        </div>
+                        <div className="flex flex-col text-right">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">تحميل التطبيق مباشرة</span>
+                          <span className="text-[9px] text-theme-text-muted mt-0.5">تثبيت بنقرة واحدة</span>
+                        </div>
+                      </button>
                     )}
 
                     <div className="h-px bg-theme-border my-1"></div>

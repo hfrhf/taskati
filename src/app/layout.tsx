@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Tajawal, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
@@ -13,10 +13,23 @@ const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
 });
 
+// إدارة الميتاداتا وتهيئة PWA بالكامل بالطريقة القياسية لـ Next.js لضمان ثباتها أثناء الـ Hydration
 export const metadata: Metadata = {
   title: "ديجي‌تاسك - إدارة المهام الفاخرة",
   description: "منصة فاخرة لإدارة المهام وتتبع الإنتاجية اليومية لفريق العمل",
   manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ديجي‌تاسك",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#111827",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -32,15 +45,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="ديجي‌تاسك" />
         <link rel="apple-touch-icon" href="/digitask-icon-192.png" />
-        <meta name="theme-color" content="#111827" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // كشف وحفظ حالة المظهر المفضلة
               (function() {
                 try {
                   var theme = localStorage.getItem('taskini-theme') || 'light';
@@ -54,6 +63,7 @@ export default function RootLayout({
                 } catch (e) {}
               })();
               
+              // تسجيل الـ Service Worker
               if ('serviceWorker' in navigator) {
                 var registerSW = function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
@@ -69,6 +79,8 @@ export default function RootLayout({
                 }
               }
 
+              // حفظ حدث beforeinstallprompt مبكراً على مستوى الـ window لضمان عدم ضياعه
+              window.deferredPrompt = null;
               window.addEventListener('beforeinstallprompt', function(e) {
                 console.log('[PWA Script] beforeinstallprompt event caught globally!');
                 e.preventDefault();
@@ -76,9 +88,11 @@ export default function RootLayout({
                 try {
                   localStorage.setItem('pwa-installed', 'false');
                 } catch(err) {}
+                // بث الحدث فوراً للمكونات التي تم تحميلها بالفعل
                 window.dispatchEvent(new CustomEvent('pwa-prompt-available', { detail: e }));
               });
 
+              // الاستماع لاكتمال التثبيت
               window.addEventListener('appinstalled', function(e) {
                 console.log('[PWA Script] appinstalled event caught globally!');
                 window.deferredPrompt = null;
