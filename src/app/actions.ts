@@ -8,7 +8,7 @@ import webpush from 'web-push'
 if (process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
   try {
     webpush.setVapidDetails(
-      'mailto:admin@digitask.local',
+      'https://taskini-murex.vercel.app',
       process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
       process.env.VAPID_PRIVATE_KEY
     )
