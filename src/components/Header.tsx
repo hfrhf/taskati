@@ -507,46 +507,69 @@ export default function Header({ user }: HeaderProps) {
         </div>
       )}
 
-      {/* نافذة التنبيه بعدم توفر التثبيت المباشر */}
+      {/* نافذة التنبيه وتعليمات التثبيت اليدوي */}
       {installErrorModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-0" role="dialog">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setInstallErrorModalOpen(false)}></div>
           <div className="relative bg-theme-panel w-full max-w-md mx-auto rounded-[2rem] p-8 shadow-2xl border border-theme-border animate-modal-in z-[61] text-right overflow-hidden">
             
-            {/* تأثير الإضاءة الخلفية */}
-            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-rose-500/10 to-transparent pointer-events-none"></div>
+            <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-emerald-500/10 to-transparent pointer-events-none"></div>
 
             <div className="relative z-10">
-              <div className="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-rose-500/20">
-                <Download className="w-8 h-8 text-rose-500" />
+              <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 mx-auto border border-emerald-500/20">
+                <Download className="w-8 h-8 text-emerald-500" />
               </div>
 
-              <h3 className="text-xl font-black text-theme-text text-center mb-3">التثبيت المباشر غير متاح حالياً</h3>
+              <h3 className="text-xl font-black text-theme-text text-center mb-3">تثبيت التطبيق</h3>
               
               <div className="bg-theme-bg/50 backdrop-blur-sm rounded-2xl p-5 mb-8 border border-theme-border shadow-inner">
-                <p className="text-sm text-theme-text-muted leading-relaxed text-center font-medium">
-                  نعتذر، لم يسمح متصفحك ببدء التثبيت التلقائي المباشر. قد يكون السبب:
-                </p>
-                <ul className="mt-4 space-y-3">
-                  <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
-                    <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-emerald-500 font-bold">1</span>
-                    </div>
-                    <span>التطبيق مثبت بالفعل على جهازك مسبقاً.</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
-                    <div className="w-6 h-6 rounded-full bg-sky-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-sky-500 font-bold">2</span>
-                    </div>
-                    <span>تستخدم وضع التصفح المتخفي (Incognito).</span>
-                  </li>
-                  <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
-                    <div className="w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                      <span className="text-amber-500 font-bold">3</span>
-                    </div>
-                    <span>متصفحك يفتقر لدعم PWA التلقائي بالكامل.</span>
-                  </li>
-                </ul>
+                {isIOS ? (
+                  <>
+                    <p className="text-sm text-theme-text-muted leading-relaxed text-center font-medium mb-4">
+                      لأنظمة iOS (الآيفون والآيباد)، يرجى اتباع الخطوات التالية لتثبيت التطبيق:
+                    </p>
+                    <ul className="space-y-3">
+                      <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <span className="text-emerald-500 font-bold">1</span>
+                        </div>
+                        <span>افتح هذا الرابط باستخدام متصفح <b>Safari</b>.</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <span className="text-emerald-500 font-bold">2</span>
+                        </div>
+                        <span>اضغط على زر المشاركة (Share) في أسفل الشاشة.</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <span className="text-emerald-500 font-bold">3</span>
+                        </div>
+                        <span>اختر "إضافة إلى الصفحة الرئيسية" (Add to Home Screen).</span>
+                      </li>
+                    </ul>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-theme-text-muted leading-relaxed text-center font-medium mb-4">
+                      التثبيت التلقائي غير متاح حالياً (قد يكون التطبيق مثبتاً بالفعل أو بسبب إعدادات المتصفح). يمكنك التثبيت يدوياً:
+                    </p>
+                    <ul className="space-y-3">
+                      <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <span className="text-emerald-500 font-bold">1</span>
+                        </div>
+                        <span>اضغط على قائمة المتصفح (الثلاث نقاط) في الأعلى.</span>
+                      </li>
+                      <li className="flex items-center gap-3 text-xs text-theme-text bg-theme-panel p-3 rounded-xl border border-theme-border shadow-sm">
+                        <div className="w-6 h-6 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <span className="text-emerald-500 font-bold">2</span>
+                        </div>
+                        <span>اختر "تثبيت التطبيق" (Install App) أو "إضافة للشاشة الرئيسية".</span>
+                      </li>
+                    </ul>
+                  </>
+                )}
               </div>
 
               <button 
