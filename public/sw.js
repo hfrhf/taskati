@@ -151,8 +151,7 @@ self.addEventListener('push', (event) => {
     const data = event.data.json();
     const options = {
       body: data.body || 'لديك إشعار جديد في ديجي تاسك.',
-      icon: '/digitask-icon-192.png',
-      badge: '/digitask-icon-192.png',
+      icon: self.location.origin + '/digitask-icon-192.png',
       vibrate: [100, 50, 100],
       data: {
         url: data.url || '/standup'
@@ -168,8 +167,7 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
       self.registration.showNotification('ديجي تاسك', {
         body: text,
-        icon: '/digitask-icon-192.png',
-        badge: '/digitask-icon-192.png'
+        icon: self.location.origin + '/digitask-icon-192.png'
       })
     );
   }
