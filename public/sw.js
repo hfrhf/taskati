@@ -1,9 +1,10 @@
-const CACHE_NAME = 'digitask-cache-v4';
+const CACHE_NAME = 'digitask-cache-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
   '/digitask-icon-192.png',
-  '/digitask-icon-512.png'
+  '/digitask-icon-512.png',
+  '/digitask-badge-96.png'
 ];
 
 // حدث التثبيت: كاش الملفات الأساسية
@@ -152,6 +153,7 @@ self.addEventListener('push', (event) => {
     const options = {
       body: data.body || 'لديك إشعار جديد في ديجي تاسك.',
       icon: self.location.origin + '/digitask-icon-192.png',
+      badge: self.location.origin + '/digitask-badge-96.png',
       vibrate: [100, 50, 100],
       data: {
         url: data.url || '/standup'
@@ -167,7 +169,8 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
       self.registration.showNotification('ديجي تاسك', {
         body: text,
-        icon: self.location.origin + '/digitask-icon-192.png'
+        icon: self.location.origin + '/digitask-icon-192.png',
+        badge: self.location.origin + '/digitask-badge-96.png'
       })
     );
   }
