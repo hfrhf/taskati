@@ -756,8 +756,9 @@ export async function submitDailyStandup(
     const profile = await getCurrentUserProfile()
     const userName = profile?.name || 'زميل لك'
 
-    // جلب كافة اشتراكات أعضاء الفريق الآخرين
-    const { data: subscriptions } = await supabase
+    // استخدام حساب الأدمن (Service Role) لتخطي RLS لجلب اشتراكات بقية الفريق
+    const adminSupabase = createAdminClient()
+    const { data: subscriptions } = await adminSupabase
       .from('push_subscriptions')
       .select('id, user_id, subscription')
       .neq('user_id', user.id)
@@ -774,10 +775,10 @@ export async function submitDailyStandup(
         try {
           await webpush.sendNotification(subRecord.subscription, payload)
         } catch (pushErr: any) {
-          // إذا كان الاشتراك منتهي أو تم إلغاؤه (410 أو 404)، نظف قاعدة البيانات منه
+          // إذا كان الاشتراك منتهي أو تم إلغاؤه (410 أو 404)، نظف قاعدة البيانات منه باستخدام حساب الأدمن
           if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
             console.log(`حذف اشتراك منتهي للمستخدم: ${subRecord.user_id}`)
-            await supabase
+            await adminSupabase
               .from('push_subscriptions')
               .delete()
               .eq('id', subRecord.id)
