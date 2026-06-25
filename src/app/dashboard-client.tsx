@@ -449,7 +449,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                           alt={selectedPartner.name} 
                           className="w-4 h-4 rounded-md object-cover border border-theme-panel/20 shrink-0" 
                         />
-                        <span>مجموعات: {selectedPartner.name}</span>
+                        <span className="truncate max-w-[110px] sm:max-w-[160px]">مجموعات: {selectedPartner.name}</span>
                         <ChevronDown className="w-3.5 h-3.5 opacity-80 shrink-0" />
                       </>
                     ) : (
@@ -463,7 +463,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                   {isPartnerDropdownOpen && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setIsPartnerDropdownOpen(false)}></div>
-                      <div className="absolute right-0 left-auto mt-2 w-52 bg-theme-panel border border-theme-border rounded-2xl shadow-xl py-2 z-50 animate-modal-in max-h-64 overflow-y-auto custom-scrollbar">
+                      <div className="absolute left-0 right-auto mt-2 w-52 bg-theme-panel border border-theme-border rounded-2xl shadow-xl py-2 z-50 animate-modal-in max-h-64 overflow-y-auto custom-scrollbar">
                         <p className="px-4 py-1 text-[9px] font-bold text-theme-text-muted select-none">اختر شريكاً لعرض مجموعاته</p>
                         <div className="h-px bg-theme-border my-1"></div>
                         
