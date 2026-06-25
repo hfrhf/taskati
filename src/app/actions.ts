@@ -59,17 +59,17 @@ export async function getGroups(dateString: string) {
     `)
     .or(`date.eq.${dateString},is_permanent.eq.true`)
 
-  // إذا لم يكن مسؤولاً، يرى فقط المجموعات التي أنشأها أو أسندت إليه
-  if (profile.role !== 'admin') {
-    query = query.or(`created_by.eq.${profile.id},assigned_to.eq.${profile.id}`)
-  }
-
   const { data: groups, error } = await query.order('created_at', { ascending: true })
   if (error) throw new Error(error.message)
 
+  // إذا لم يكن مسؤولاً، يرى فقط المجموعات التي أنشأها أو أسندت إليه
+  const filteredGroups = profile.role === 'admin'
+    ? (groups || [])
+    : (groups || []).filter(g => g.created_by === profile.id || g.assigned_to === profile.id)
+
   // جلب إحصائيات المهام لكل مجموعة
   const groupsWithStats = await Promise.all(
-    (groups || []).map(async (group) => {
+    filteredGroups.map(async (group) => {
       let tasksQuery = supabase
         .from('tasks')
         .select('id, status, assigned_to')
