@@ -18,7 +18,8 @@ import {
   CheckCircle2,
   FileSpreadsheet,
   Edit2,
-  Pin
+  Pin,
+  ChevronDown
 } from 'lucide-react'
 import { 
   getGroups, 
@@ -130,6 +131,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
 
   // تصفية المجموعات للآدمن (مجموعاتي، المجموعات العامة، الشركاء الآخرين)
   const [activeTab, setActiveTab] = useState<string>('my-groups')
+  const [isPartnerDropdownOpen, setIsPartnerDropdownOpen] = useState(false)
 
   useEffect(() => {
     if (isTaskModalOpen) {
@@ -140,6 +142,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
   // جلب المجموعات عند تغيير التاريخ
   useEffect(() => {
     setActiveTab('my-groups')
+    setIsPartnerDropdownOpen(false)
     fetchGroupsList()
   }, [selectedDate])
 
@@ -358,6 +361,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
   }
 
   const filteredGroups = getFilteredGroups()
+  const selectedPartner = teamProfiles.find(u => u.id === activeTab)
 
   return (
     <div className="flex-grow flex flex-col min-h-screen pb-24 md:pb-8">
@@ -396,23 +400,29 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
 
             {/* شريط تبويبات الفلترة المخصص للأدمن */}
             {currentProfile.role === 'admin' && groups.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-theme-border/40">
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-theme-border/40 text-right">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('my-groups')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  onClick={() => {
+                    setActiveTab('my-groups')
+                    setIsPartnerDropdownOpen(false)
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeTab === 'my-groups'
                       ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
                       : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
                   }`}
                 >
-                  مجموعاتي والمجموعات العامة
+                  مجموعاتي
                 </button>
                 
                 <button
                   type="button"
-                  onClick={() => setActiveTab('all-groups')}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                  onClick={() => {
+                    setActiveTab('all-groups')
+                    setIsPartnerDropdownOpen(false)
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     activeTab === 'all-groups'
                       ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
                       : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
@@ -421,29 +431,79 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                   كل المجموعات
                 </button>
 
-                {teamProfiles
-                  .filter(u => u.id !== currentProfile.id)
-                  .map(u => {
-                    const hasGroupsToday = groups.some(g => g.created_by === u.id || g.assigned_to === u.id)
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => setActiveTab(u.id)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer relative ${
-                          activeTab === u.id
-                            ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
-                            : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
-                        } ${!hasGroupsToday ? 'opacity-65' : ''}`}
-                      >
-                        <img src={u.avatar_url} alt={u.name} className="w-4 h-4 rounded-md object-cover border border-theme-border/60 shrink-0" />
-                        <span>{u.name}</span>
-                        {hasGroupsToday && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        )}
-                      </button>
-                    )
-                  })}
+                {/* قائمة الشركاء المنسدلة الذكية */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsPartnerDropdownOpen(!isPartnerDropdownOpen)}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      activeTab !== 'my-groups' && activeTab !== 'all-groups'
+                        ? 'bg-theme-accent text-theme-panel border-transparent shadow-md shadow-theme-accent/15'
+                        : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border-theme-border'
+                    }`}
+                  >
+                    {selectedPartner ? (
+                      <>
+                        <img 
+                          src={selectedPartner.avatar_url} 
+                          alt={selectedPartner.name} 
+                          className="w-4 h-4 rounded-md object-cover border border-theme-panel/20 shrink-0" 
+                        />
+                        <span>مجموعات: {selectedPartner.name}</span>
+                        <ChevronDown className="w-3.5 h-3.5 opacity-80 shrink-0" />
+                      </>
+                    ) : (
+                      <>
+                        <span>مجموعات الشركاء</span>
+                        <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
+                      </>
+                    )}
+                  </button>
+
+                  {isPartnerDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setIsPartnerDropdownOpen(false)}></div>
+                      <div className="absolute right-0 left-auto mt-2 w-52 bg-theme-panel border border-theme-border rounded-2xl shadow-xl py-2 z-50 animate-modal-in max-h-64 overflow-y-auto custom-scrollbar">
+                        <p className="px-4 py-1 text-[9px] font-bold text-theme-text-muted select-none">اختر شريكاً لعرض مجموعاته</p>
+                        <div className="h-px bg-theme-border my-1"></div>
+                        
+                        {teamProfiles
+                          .filter(u => u.id !== currentProfile.id)
+                          .map(u => {
+                            const hasGroupsToday = groups.some(g => g.created_by === u.id || g.assigned_to === u.id)
+                            const isSelected = activeTab === u.id
+
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab(u.id)
+                                  setIsPartnerDropdownOpen(false)
+                                }}
+                                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors hover:bg-theme-bg cursor-pointer text-right ${
+                                  isSelected ? 'text-theme-accent bg-theme-accent/5' : 'text-theme-text'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <img 
+                                    src={u.avatar_url} 
+                                    alt={u.name} 
+                                    className="w-4.5 h-4.5 rounded-lg object-cover border border-theme-border shrink-0" 
+                                  />
+                                  <span className="truncate">{u.name}</span>
+                                </div>
+                                
+                                {hasGroupsToday && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                )}
+                              </button>
+                            )
+                          })}
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 
