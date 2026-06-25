@@ -128,6 +128,9 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
 
   const [taskDueDate, setTaskDueDate] = useState('')
 
+  // تصفية المجموعات للآدمن (مجموعاتي، المجموعات العامة، الشركاء الآخرين)
+  const [activeTab, setActiveTab] = useState<string>('my-groups')
+
   useEffect(() => {
     if (isTaskModalOpen) {
       setTaskDueDate(selectedDate)
@@ -136,6 +139,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
 
   // جلب المجموعات عند تغيير التاريخ
   useEffect(() => {
+    setActiveTab('my-groups')
     fetchGroupsList()
   }, [selectedDate])
 
@@ -338,6 +342,23 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
     }
   }
 
+  // تصفية مجموعات العمل للآدمن
+  const getFilteredGroups = () => {
+    if (currentProfile.role !== 'admin') {
+      return groups
+    }
+    if (activeTab === 'my-groups') {
+      return groups.filter(g => !g.assigned_to || g.created_by === currentProfile.id || g.assigned_to === currentProfile.id)
+    }
+    if (activeTab === 'all-groups') {
+      return groups
+    }
+    // تصفية المجموعات حسب عضو معين
+    return groups.filter(g => g.created_by === activeTab || g.assigned_to === activeTab)
+  }
+
+  const filteredGroups = getFilteredGroups()
+
   return (
     <div className="flex-grow flex flex-col min-h-screen pb-24 md:pb-8">
       <Header user={currentProfile} />
@@ -373,6 +394,59 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
               </div>
             </div>
 
+            {/* شريط تبويبات الفلترة المخصص للأدمن */}
+            {currentProfile.role === 'admin' && groups.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-theme-border/40">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('my-groups')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    activeTab === 'my-groups'
+                      ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
+                      : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
+                  }`}
+                >
+                  مجموعاتي والمجموعات العامة
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('all-groups')}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    activeTab === 'all-groups'
+                      ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
+                      : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
+                  }`}
+                >
+                  كل المجموعات
+                </button>
+
+                {teamProfiles
+                  .filter(u => u.id !== currentProfile.id)
+                  .map(u => {
+                    const hasGroupsToday = groups.some(g => g.created_by === u.id || g.assigned_to === u.id)
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => setActiveTab(u.id)}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer relative ${
+                          activeTab === u.id
+                            ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
+                            : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
+                        } ${!hasGroupsToday ? 'opacity-65' : ''}`}
+                      >
+                        <img src={u.avatar_url} alt={u.name} className="w-4 h-4 rounded-md object-cover border border-theme-border/60 shrink-0" />
+                        <span>{u.name}</span>
+                        {hasGroupsToday && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        )}
+                      </button>
+                    )
+                  })}
+              </div>
+            )}
+
             {/* شبكة كروت المجموعات */}
             {isLoadingGroups ? (
               <div className="flex flex-col items-center justify-center p-12 text-theme-text-muted">
@@ -387,9 +461,17 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                   لم يتم العثور على مجموعات نشطة في هذا التاريخ. يمكنك إنشاء واحدة جديدة فوراً!
                 </p>
               </div>
+            ) : filteredGroups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-16 text-center bg-theme-panel rounded-3xl border border-dashed border-theme-border">
+                <FolderKanban className="w-12 h-12 text-theme-text-muted mb-3 opacity-40" />
+                <h3 className="text-sm font-bold text-theme-text">لا توجد مجموعات عمل في هذا القسم</h3>
+                <p className="text-xs text-theme-text-muted max-w-xs mt-1 leading-relaxed">
+                  لم يتم العثور على مجموعات نشطة تابعة للفلتر المختار لهذا اليوم.
+                </p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {groups.map((group) => {
+                {filteredGroups.map((group) => {
                   const style = colorClassMap[group.color] || colorClassMap.classic
                   const canEditGroup = currentProfile.role === 'admin' || group.created_by === currentProfile.id
                   return (
