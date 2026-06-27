@@ -915,7 +915,7 @@ export default function AvailabilityClient({
                             </button>
                           </label>
 
-                          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          <div className="space-y-2 pr-1">
                             {newPollOptions.map((opt, idx) => (
                               <div key={idx} className="flex gap-2 items-center">
                                 <div className="w-1/2">
@@ -1150,6 +1150,7 @@ export default function AvailabilityClient({
                     value={scheduleModal.date}
                     onChange={(val) => setScheduleModal(prev => ({ ...prev, date: val }))}
                     className="w-full"
+                    direction="up"
                   />
                 </div>
                 <div className="space-y-1">
