@@ -388,7 +388,6 @@ export default function AvailabilityClient({
 
   // فتح نافذة اعتماد موعد لجدولته
   const openScheduleModal = (poll: MeetingPoll, option: MeetingPollOption) => {
-    const typeLabel = poll.meeting_type === 'online' ? 'Google Meet' : 'لقاء حضوري'
     setScheduleModal({
       isOpen: true,
       pollId: poll.id,
@@ -497,14 +496,14 @@ export default function AvailabilityClient({
               </p>
             </div>
             
-            {/* أزرار التبويبات الفخمة */}
-            <div className="flex bg-neutral-900/60 p-1 border border-theme-border rounded-2xl w-fit self-end">
+            {/* أزرار التبويبات الملتزمة بنسبة 100% بالهوية البصرية والبراند للمشروع */}
+            <div className="flex flex-wrap items-center gap-2 pb-2 text-right w-full sm:w-auto">
               <button 
                 onClick={() => setActiveTab('my-availability')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                   activeTab === 'my-availability' 
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
-                    : 'text-theme-text-muted hover:text-theme-text'
+                    ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15 border-transparent' 
+                    : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border-theme-border'
                 }`}
               >
                 <Clock className="w-3.5 h-3.5" />
@@ -512,10 +511,10 @@ export default function AvailabilityClient({
               </button>
               <button 
                 onClick={() => setActiveTab('team-meetings')}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                   activeTab === 'team-meetings' 
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20' 
-                    : 'text-theme-text-muted hover:text-theme-text'
+                    ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15 border-transparent' 
+                    : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border-theme-border'
                 }`}
               >
                 <Users className="w-3.5 h-3.5" />
@@ -629,7 +628,7 @@ export default function AvailabilityClient({
               <div className="space-y-3 text-right">
                 <div className="flex items-center justify-between">
                   <h2 className="text-sm font-bold text-theme-text-muted flex items-center gap-1.5">
-                    <CalendarDays className="w-4 h-4 text-indigo-400" />
+                    <CalendarDays className="w-4 h-4 text-theme-accent" />
                     <span>الاجتماعات المجدولة القادمة</span>
                   </h2>
                 </div>
@@ -643,17 +642,17 @@ export default function AvailabilityClient({
                     {scheduledMeetings.map((meeting) => (
                       <div 
                         key={meeting.id} 
-                        className="bg-theme-panel border border-theme-border/60 hover:border-indigo-500/30 transition-all rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between"
+                        className="bg-theme-panel border border-theme-border/60 hover:border-theme-accent/30 transition-all rounded-3xl p-5 shadow-sm relative overflow-hidden flex flex-col justify-between"
                       >
                         {/* خط علوي ملون بناءً على نوع الاجتماع */}
-                        <div className={`absolute top-0 left-0 right-0 h-1.5 ${meeting.meeting_type === 'online' ? 'bg-indigo-600' : 'bg-amber-500'}`}></div>
+                        <div className={`absolute top-0 left-0 right-0 h-1.5 ${meeting.meeting_type === 'online' ? 'bg-theme-accent' : 'bg-amber-500'}`}></div>
                         
                         <div className="space-y-4">
                           <div className="flex items-start justify-between">
                             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                               meeting.meeting_type === 'online' 
-                                ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-500/10' 
-                                : 'bg-amber-950/40 text-amber-400 border border-amber-500/10'
+                                ? 'bg-theme-accent/10 text-theme-text border border-theme-accent/20' 
+                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
                             }`}>
                               {meeting.meeting_type === 'online' ? 'جوجل ميت (إجباري)' : 'لقاء كافيه (اختياري)'}
                             </span>
@@ -678,20 +677,20 @@ export default function AvailabilityClient({
                           </div>
 
                           {/* الموعد والعد التنازلي */}
-                          <div className="bg-neutral-900/60 p-3.5 rounded-2xl flex flex-col gap-1.5 border border-theme-border">
+                          <div className="bg-theme-input p-3.5 rounded-2xl flex flex-col gap-1.5 border border-theme-border">
                             <div className="flex justify-between items-center text-xs font-bold text-theme-text">
                               <span className="flex items-center gap-1">
-                                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                                <Calendar className="w-3.5 h-3.5 text-theme-accent" />
                                 <span>{getArabicFormattedDate(meeting.meeting_date)}</span>
                               </span>
                               <span className="flex items-center gap-1">
-                                <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                                <Clock className="w-3.5 h-3.5 text-theme-accent" />
                                 <span>{meeting.meeting_time.slice(0, 5)}</span>
                               </span>
                             </div>
                             
-                            <div className="text-[10px] text-indigo-300 font-bold flex items-center gap-1.5 mt-1 border-t border-theme-border/50 pt-1.5">
-                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping"></span>
+                            <div className="text-[10px] text-theme-text font-bold flex items-center gap-1.5 mt-1 border-t border-theme-border/50 pt-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-theme-accent animate-ping"></span>
                               <span>{getCountdownString(meeting.meeting_date, meeting.meeting_time)}</span>
                             </div>
                           </div>
@@ -704,7 +703,7 @@ export default function AvailabilityClient({
                               href={meeting.location_url || '#'} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 active:scale-95"
+                              className="bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold text-xs py-2 px-4 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-theme-accent/15 active:scale-95"
                             >
                               <Video className="w-3.5 h-3.5" />
                               <span>انضمام إلى Google Meet</span>
@@ -732,7 +731,7 @@ export default function AvailabilityClient({
               {/* قسم 2: استطلاعات التصويت النشطة حالياً */}
               <div className="space-y-3 text-right">
                 <h2 className="text-sm font-bold text-theme-text-muted flex items-center gap-1.5">
-                  <CheckSquare className="w-4 h-4 text-violet-400" />
+                  <CheckSquare className="w-4 h-4 text-theme-accent" />
                   <span>التصويتات المفتوحة للفريق</span>
                 </h2>
 
@@ -755,7 +754,7 @@ export default function AvailabilityClient({
                                 نوع الاجتماع المُرتقب: {poll.meeting_type === 'online' ? 'جوجل ميت (أونلاين)' : 'لقاء حضوري'}
                               </p>
                             </div>
-                            <span className="text-[9px] bg-violet-950/40 border border-violet-500/20 text-violet-400 px-2 py-0.5 rounded-full font-bold">
+                            <span className="text-[9px] bg-theme-accent/10 border border-theme-border text-theme-text px-2 py-0.5 rounded-full font-bold">
                               نشط للتصويت
                             </span>
                           </div>
@@ -765,7 +764,6 @@ export default function AvailabilityClient({
                             {poll.options.map((opt) => {
                               const isChecked = userVotes.includes(opt.id)
                               const optVotes = opt.votes || []
-                              const hasVotes = optVotes.length > 0
                               const percent = teamProfiles.length > 0 ? Math.round((optVotes.length / teamProfiles.length) * 100) : 0
 
                               return (
@@ -774,21 +772,21 @@ export default function AvailabilityClient({
                                   onClick={() => handleToggleVoteOption(poll.id, opt.id)}
                                   className={`border p-3.5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer select-none transition-all ${
                                     isChecked 
-                                      ? 'bg-indigo-600/10 border-indigo-500' 
-                                      : 'bg-neutral-900/40 border-theme-border hover:bg-neutral-900/60'
+                                      ? 'bg-theme-accent/10 border-theme-accent' 
+                                      : 'bg-theme-input/40 border-theme-border hover:bg-theme-input/60'
                                   }`}
                                 >
                                   {/* التاريخ والتصويت */}
                                   <div className="flex items-center gap-3">
                                     <div className={`w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-all ${
-                                      isChecked ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-neutral-600 text-transparent'
+                                      isChecked ? 'bg-theme-accent border-theme-accent text-theme-panel' : 'border-neutral-600 text-transparent'
                                     }`}>
                                       <Check className="w-3.5 h-3.5 stroke-[3px]" />
                                     </div>
 
                                     <div>
                                       <span className="text-xs font-bold text-theme-text flex items-center gap-1.5">
-                                        <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                                        <Calendar className="w-3.5 h-3.5 text-theme-accent shrink-0" />
                                         <span>{getArabicFormattedDate(opt.proposed_date)}</span>
                                       </span>
                                       <span className="text-[11px] text-theme-text-muted flex items-center gap-1.5 mt-0.5">
@@ -802,13 +800,13 @@ export default function AvailabilityClient({
                                   <div className="flex items-center gap-3 md:self-center shrink-0">
                                     {/* قائمة الآفاتارات الفاخرة للذين صوتوا */}
                                     <div className="flex -space-x-1.5 overflow-hidden justify-end">
-                                      {optVotes.map((v, idx) => (
+                                      {optVotes.map((v) => (
                                         <img 
                                           key={v.id}
                                           src={v.profile.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde'} 
                                           alt={v.profile.name}
                                           title={v.profile.name}
-                                          className="w-5 h-5 rounded-full border border-neutral-900 object-cover shrink-0"
+                                          className="w-5 h-5 rounded-full border border-theme-panel object-cover shrink-0"
                                         />
                                       ))}
                                     </div>
@@ -816,8 +814,8 @@ export default function AvailabilityClient({
                                     {/* نسبة وعدد الأصوات */}
                                     <div className="text-left md:text-right shrink-0">
                                       <span className="text-xs font-bold text-theme-text">{optVotes.length} أصوات</span>
-                                      <div className="w-24 bg-neutral-800 rounded-full h-1 mt-1 overflow-hidden">
-                                        <div className="bg-indigo-500 h-1 transition-all" style={{ width: `${percent}%` }}></div>
+                                      <div className="w-24 bg-theme-bg rounded-full h-1 mt-1 overflow-hidden">
+                                        <div className="bg-theme-accent h-1 transition-all" style={{ width: `${percent}%` }}></div>
                                       </div>
                                     </div>
 
@@ -828,7 +826,7 @@ export default function AvailabilityClient({
                                           e.stopPropagation()
                                           openScheduleModal(poll, opt)
                                         }}
-                                        className="bg-indigo-600/30 text-indigo-300 border border-indigo-500/20 hover:bg-indigo-600 hover:text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shrink-0"
+                                        className="bg-theme-accent/20 text-theme-text border border-theme-accent/10 hover:bg-theme-accent hover:text-theme-panel px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer shrink-0"
                                       >
                                         جدولة هذا الموعد
                                       </button>
@@ -843,7 +841,7 @@ export default function AvailabilityClient({
                             <button
                               onClick={() => handleSaveVotes(poll.id)}
                               disabled={isSaving}
-                              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs py-2 px-5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 cursor-pointer active:scale-95"
+                              className="bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold text-xs py-2 px-5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-theme-accent/15 cursor-pointer active:scale-95"
                             >
                               {isSaving ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -865,7 +863,7 @@ export default function AvailabilityClient({
                 <div className="border-t border-theme-border/60 pt-8 space-y-8">
                   <div className="border-b border-theme-border pb-3">
                     <h2 className="text-lg font-bold text-theme-text flex items-center gap-1.5">
-                      <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                      <ShieldCheck className="w-5 h-5 text-theme-accent" />
                       <span>صلاحيات المشرف والتنسيق الذكي</span>
                     </h2>
                   </div>
@@ -876,7 +874,7 @@ export default function AvailabilityClient({
                     <div className="bg-theme-panel border border-theme-border rounded-3xl p-5 shadow-sm space-y-4 lg:col-span-1 text-right flex flex-col justify-between">
                       <form onSubmit={handleCreatePoll} className="space-y-4">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-theme-text">
-                          <Plus className="w-4 h-4 text-indigo-400" />
+                          <Plus className="w-4 h-4 text-theme-accent" />
                           <span>إطلاق تصويت أسبوعي جديد</span>
                         </div>
 
@@ -887,7 +885,7 @@ export default function AvailabilityClient({
                             placeholder="مثال: موعد جوجل ميت للأسبوع 26"
                             value={newPollTitle}
                             onChange={(e) => setNewPollTitle(e.target.value)}
-                            className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-indigo-500 transition-colors"
+                            className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent transition-colors"
                           />
                         </div>
 
@@ -896,7 +894,7 @@ export default function AvailabilityClient({
                           <select 
                             value={newPollType}
                             onChange={(e) => setNewPollType(e.target.value as any)}
-                            className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-indigo-500 transition-colors"
+                            className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent transition-colors"
                           >
                             <option value="online">جوجل ميت (أونلاين)</option>
                             <option value="offline">لقاء كافيه (حضوري)</option>
@@ -909,7 +907,7 @@ export default function AvailabilityClient({
                             <button 
                               type="button" 
                               onClick={addPollOptionRow}
-                              className="text-[9px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-0.5 cursor-pointer"
+                              className="text-[9px] text-theme-accent hover:text-theme-accent-hover font-bold flex items-center gap-0.5 cursor-pointer"
                             >
                               <Plus className="w-3 h-3" />
                               <span>إضافة خيار</span>
@@ -923,13 +921,13 @@ export default function AvailabilityClient({
                                   type="date"
                                   value={opt.date}
                                   onChange={(e) => handlePollOptionChange(idx, 'date', e.target.value)}
-                                  className="w-1/2 bg-neutral-900/60 border border-theme-border rounded-lg p-1.5 text-[10px] text-theme-text focus:outline-none focus:border-indigo-500"
+                                  className="w-1/2 bg-theme-input border border-theme-border rounded-lg p-1.5 text-[10px] text-theme-text focus:outline-none focus:border-theme-accent"
                                 />
                                 <input 
                                   type="time"
                                   value={opt.time}
                                   onChange={(e) => handlePollOptionChange(idx, 'time', e.target.value)}
-                                  className="w-1/2 bg-neutral-900/60 border border-theme-border rounded-lg p-1.5 text-[10px] text-theme-text focus:outline-none focus:border-indigo-500"
+                                  className="w-1/2 bg-theme-input border border-theme-border rounded-lg p-1.5 text-[10px] text-theme-text focus:outline-none focus:border-theme-accent"
                                 />
                                 {newPollOptions.length > 1 && (
                                   <button 
@@ -948,7 +946,7 @@ export default function AvailabilityClient({
                         <button
                           type="submit"
                           disabled={loading}
-                          className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                          className="w-full bg-theme-accent hover:bg-theme-accent-hover disabled:opacity-50 text-theme-panel font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-theme-accent/15 cursor-pointer"
                         >
                           {loading ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1028,7 +1026,7 @@ export default function AvailabilityClient({
                                         key={hour}
                                         onClick={() => setSelectedHeatmapCell({ day: dayIndex, hour })}
                                         className={`aspect-square rounded border text-[7px] font-bold flex items-center justify-center transition-all cursor-pointer ${colorClass} ${
-                                          isSelected ? 'ring-2 ring-indigo-500 scale-105' : 'hover:scale-105'
+                                          isSelected ? 'ring-2 ring-theme-accent scale-105' : 'hover:scale-105'
                                         }`}
                                         title={`يوم ${dayName} | الساعة ${String(hour).padStart(2, '0')}:00\nالتوافق: ${compat.percentage}% (${compat.count}/${teamProfiles.length} أعضاء)`}
                                       >
@@ -1044,7 +1042,7 @@ export default function AvailabilityClient({
                       </div>
 
                       {/* تفاصيل الخلية المحددة */}
-                      <div className="bg-neutral-900/60 p-4 border border-theme-border rounded-2xl text-xs space-y-2 mt-2">
+                      <div className="bg-theme-input p-4 border border-theme-border rounded-2xl text-xs space-y-2 mt-2">
                         {selectedHeatmapCell ? (
                           (() => {
                             const { day, hour } = selectedHeatmapCell
@@ -1052,7 +1050,7 @@ export default function AvailabilityClient({
                             return (
                               <div className="space-y-2 text-right">
                                 <div className="flex justify-between items-center text-xs font-bold border-b border-theme-border/60 pb-1.5">
-                                  <span className="text-indigo-400">التفاصيل المتقاطعة</span>
+                                  <span className="text-theme-accent">التفاصيل المتقاطعة</span>
                                   <span className="text-theme-text">يوم {daysOfWeekArabic[day]} | الساعة {String(hour).padStart(2, '0')}:00</span>
                                 </div>
                                 
@@ -1125,7 +1123,7 @@ export default function AvailabilityClient({
                 <XCircle className="w-5 h-5" />
               </button>
               <h3 className="text-base font-bold text-theme-text flex items-center gap-1.5">
-                <CalendarDays className="w-5 h-5 text-indigo-400" />
+                <CalendarDays className="w-5 h-5 text-theme-accent" />
                 <span>اعتماد وجدولة الاجتماع النهائي</span>
               </h3>
             </div>
@@ -1138,7 +1136,7 @@ export default function AvailabilityClient({
                   placeholder="مثال: اللقاء الأسبوعي السريع"
                   value={scheduleModal.title}
                   onChange={(e) => setScheduleModal(prev => ({ ...prev, title: e.target.value }))}
-                  className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
                   required
                 />
               </div>
@@ -1150,7 +1148,7 @@ export default function AvailabilityClient({
                     type="date"
                     value={scheduleModal.date}
                     onChange={(e) => setScheduleModal(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
                     required
                   />
                 </div>
@@ -1160,7 +1158,7 @@ export default function AvailabilityClient({
                     type="time"
                     value={scheduleModal.time}
                     onChange={(e) => setScheduleModal(prev => ({ ...prev, time: e.target.value }))}
-                    className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
                     required
                   />
                 </div>
@@ -1175,7 +1173,7 @@ export default function AvailabilityClient({
                   placeholder={scheduleModal.meetingType === 'online' ? 'https://meet.google.com/xxx-xxxx-xxx' : 'https://maps.google.com/...'}
                   value={scheduleModal.locationUrl}
                   onChange={(e) => setScheduleModal(prev => ({ ...prev, locationUrl: e.target.value }))}
-                  className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none"
+                  className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none"
                 />
               </div>
 
@@ -1186,7 +1184,7 @@ export default function AvailabilityClient({
                   placeholder="ملاحظات أو أجندة الاجتماع للشركاء..."
                   value={scheduleModal.notes}
                   onChange={(e) => setScheduleModal(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full bg-neutral-900/60 border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none"
+                  className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none"
                 />
               </div>
 
@@ -1201,7 +1199,7 @@ export default function AvailabilityClient({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs py-2 px-5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
+                  className="bg-theme-accent hover:bg-theme-accent-hover disabled:opacity-50 text-theme-panel font-bold text-xs py-2 px-5 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-theme-accent/15 cursor-pointer"
                 >
                   {loading ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
