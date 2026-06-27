@@ -1029,6 +1029,292 @@ export async function getMonthlyAnalytics(month: number, year: number) {
   }
 }
 
+// 6. منسق الاجتماعات والتصويت أسبوعياً
+
+// جلب متاحية كافة الأعضاء لبناء الـ Heatmap
+export async function getAllMembersAvailability() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('user_availability')
+    .select('*')
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+// جلب التصويتات النشطة
+export async function getActivePolls() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data: polls, error: pollsError } = await supabase
+    .from('meeting_polls')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+
+  if (pollsError) throw new Error(pollsError.message)
+  if (!polls || polls.length === 0) return []
+
+  const pollIds = polls.map(p => p.id)
+
+  const { data: options, error: optionsError } = await supabase
+    .from('meeting_poll_options')
+    .select('*')
+    .in('poll_id', pollIds)
+
+  if (optionsError) throw new Error(optionsError.message)
+
+  const optionIds = options?.map(o => o.id) || []
+  let votes: any[] = []
+  if (optionIds.length > 0) {
+    const { data: votesData, error: votesError } = await supabase
+      .from('meeting_poll_votes')
+      .select('*, profile:profiles(name, avatar_url)')
+      .in('option_id', optionIds)
+    if (votesError) throw new Error(votesError.message)
+    votes = votesData || []
+  }
+
+  return polls.map(poll => {
+    const pollOptions = (options || []).filter(o => o.poll_id === poll.id).map(opt => {
+      const optVotes = votes.filter(v => v.option_id === opt.id)
+      return {
+        ...opt,
+        votes: optVotes
+      }
+    })
+    return {
+      ...poll,
+      options: pollOptions
+    }
+  })
+}
+
+// إنشاء استطلاع موعد اجتماع جديد (Admin Only)
+export async function createMeetingPoll(
+  title: string,
+  meetingType: 'online' | 'offline',
+  options: { proposed_date: string; proposed_time: string }[]
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile || profile.role !== 'admin') throw new Error('صلاحيات غير كافية')
+
+  const { data: poll, error: pollError } = await supabase
+    .from('meeting_polls')
+    .insert({
+      title,
+      meeting_type: meetingType,
+      status: 'active'
+    })
+    .select()
+    .single()
+
+  if (pollError) throw new Error(pollError.message)
+
+  const optionsToInsert = options.map(opt => ({
+    poll_id: poll.id,
+    proposed_date: opt.proposed_date,
+    proposed_time: opt.proposed_time
+  }))
+
+  const { error: optionsError } = await supabase
+    .from('meeting_poll_options')
+    .insert(optionsToInsert)
+
+  if (optionsError) {
+    await supabase.from('meeting_polls').delete().eq('id', poll.id)
+    throw new Error(optionsError.message)
+  }
+
+  try {
+    const adminSupabase = createAdminClient()
+    const { data: subscriptions } = await adminSupabase
+      .from('push_subscriptions')
+      .select('id, user_id, subscription')
+      .neq('user_id', profile.id)
+
+    if (subscriptions && subscriptions.length > 0) {
+      const payload = JSON.stringify({
+        title: 'استطلاع موعد اجتماع جديد 🗳️',
+        body: `تم فتح تصويت جديد: "${title}". شاركنا مواعيدك المفضلة!`,
+        url: '/availability'
+      })
+
+      const pushPromises = subscriptions.map(async (subRecord: any) => {
+        try {
+          await webpush.sendNotification(subRecord.subscription, payload)
+        } catch (pushErr: any) {
+          if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+            await adminSupabase.from('push_subscriptions').delete().eq('id', subRecord.id)
+          }
+        }
+      })
+      await Promise.allSettled(pushPromises)
+    }
+  } catch (err) {
+    console.error('Error sending poll push notification:', err)
+  }
+
+  revalidatePath('/availability')
+  return poll
+}
+
+// حفظ تصويتات العضو
+export async function submitMeetingVotes(pollId: string, optionIds: string[]) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data: pollOptions, error: optError } = await supabase
+    .from('meeting_poll_options')
+    .select('id')
+    .eq('poll_id', pollId)
+
+  if (optError) throw new Error(optError.message)
+  const pollOptionIds = pollOptions.map(o => o.id)
+
+  if (pollOptionIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('meeting_poll_votes')
+      .delete()
+      .eq('user_id', profile.id)
+      .in('option_id', pollOptionIds)
+
+    if (deleteError) throw new Error(deleteError.message)
+  }
+
+  if (optionIds.length > 0) {
+    const votesToInsert = optionIds.map(optId => ({
+      option_id: optId,
+      user_id: profile.id
+    }))
+
+    const { error: insertError } = await supabase
+      .from('meeting_poll_votes')
+      .insert(votesToInsert)
+
+    if (insertError) throw new Error(insertError.message)
+  }
+
+  revalidatePath('/availability')
+  return { success: true }
+}
+
+// جدولة اجتماع جديد (Admin Only)
+export async function scheduleMeeting(
+  pollId: string | null,
+  title: string,
+  meetingType: 'online' | 'offline',
+  date: string,
+  time: string,
+  locationUrl: string,
+  notes: string
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile || profile.role !== 'admin') throw new Error('صلاحيات غير كافية')
+
+  const { data: meeting, error: meetingError } = await supabase
+    .from('scheduled_meetings')
+    .insert({
+      title,
+      meeting_type: meetingType,
+      meeting_date: date,
+      meeting_time: time,
+      location_url: locationUrl || null,
+      notes: notes || null,
+      created_by: profile.id
+    })
+    .select()
+    .single()
+
+  if (meetingError) throw new Error(meetingError.message)
+
+  if (pollId) {
+    const { error: pollError } = await supabase
+      .from('meeting_polls')
+      .update({ status: 'completed' })
+      .eq('id', pollId)
+    if (pollError) console.error('Error updating poll status:', pollError)
+  }
+
+  try {
+    const adminSupabase = createAdminClient()
+    const { data: subscriptions } = await adminSupabase
+      .from('push_subscriptions')
+      .select('id, user_id, subscription')
+      .neq('user_id', profile.id)
+
+    if (subscriptions && subscriptions.length > 0) {
+      const typeLabel = meetingType === 'online' ? 'Google Meet' : 'لقاء حضوري'
+      const payload = JSON.stringify({
+        title: 'تم تحديد موعد الاجتماع! 📅',
+        body: `تم جدولة اجتماع: "${title}" (${typeLabel}) يوم ${date} في تمام الساعة ${time.slice(0, 5)}.`,
+        url: '/availability'
+      })
+
+      const pushPromises = subscriptions.map(async (subRecord: any) => {
+        try {
+          await webpush.sendNotification(subRecord.subscription, payload)
+        } catch (pushErr: any) {
+          if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+            await adminSupabase.from('push_subscriptions').delete().eq('id', subRecord.id)
+          }
+        }
+      })
+      await Promise.allSettled(pushPromises)
+    }
+  } catch (err) {
+    console.error('Error sending scheduled meeting push notification:', err)
+  }
+
+  revalidatePath('/availability')
+  return meeting
+}
+
+// جلب الاجتماعات المجدولة
+export async function getScheduledMeetings() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const { data, error } = await supabase
+    .from('scheduled_meetings')
+    .select('*, creator:profiles(name, avatar_url)')
+    .gte('meeting_date', todayStr)
+    .order('meeting_date', { ascending: true })
+    .order('meeting_time', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+// حذف أو إلغاء اجتماع (Admin Only)
+export async function deleteScheduledMeeting(meetingId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile || profile.role !== 'admin') throw new Error('صلاحيات غير كافية')
+
+  const { error } = await supabase
+    .from('scheduled_meetings')
+    .delete()
+    .eq('id', meetingId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/availability')
+  return { success: true }
+}
+
+
 
 
 

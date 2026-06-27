@@ -317,3 +317,91 @@ alter table public.push_subscriptions enable row level security;
 create policy "Allow users to manage their own push subscriptions" on public.push_subscriptions
   for all using (auth.uid() = user_id);
 
+
+-- 11. إنشاء جدول استطلاعات المواعيد (meeting_polls)
+create table if not exists public.meeting_polls (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  meeting_type text not null check (meeting_type in ('online', 'offline')),
+  status text not null default 'active' check (status in ('active', 'completed')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.meeting_polls enable row level security;
+
+create policy "Allow all authenticated users to read meeting_polls" on public.meeting_polls
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow admins full access to meeting_polls" on public.meeting_polls
+  for all using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+-- 12. إنشاء جدول خيارات الموعد المقترح (meeting_poll_options)
+create table if not exists public.meeting_poll_options (
+  id uuid default gen_random_uuid() primary key,
+  poll_id uuid references public.meeting_polls(id) on delete cascade not null,
+  proposed_date date not null,
+  proposed_time time not null
+);
+
+alter table public.meeting_poll_options enable row level security;
+
+create policy "Allow all authenticated users to read meeting_poll_options" on public.meeting_poll_options
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow admins full access to meeting_poll_options" on public.meeting_poll_options
+  for all using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+-- 13. إنشاء جدول أصوات المستخدمين (meeting_poll_votes)
+create table if not exists public.meeting_poll_votes (
+  id uuid default gen_random_uuid() primary key,
+  option_id uuid references public.meeting_poll_options(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique (option_id, user_id)
+);
+
+alter table public.meeting_poll_votes enable row level security;
+
+create policy "Allow all authenticated users to read meeting_poll_votes" on public.meeting_poll_votes
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow users to manage their own votes" on public.meeting_poll_votes
+  for all using (auth.uid() = user_id);
+
+-- 14. إنشاء جدول الاجتماعات المجدولة النهائية (scheduled_meetings)
+create table if not exists public.scheduled_meetings (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  meeting_type text not null check (meeting_type in ('online', 'offline')),
+  meeting_date date not null,
+  meeting_time time not null,
+  location_url text,
+  notes text,
+  created_by uuid references public.profiles(id) on delete set null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.scheduled_meetings enable row level security;
+
+create policy "Allow all authenticated users to read scheduled_meetings" on public.scheduled_meetings
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow admins full access to scheduled_meetings" on public.scheduled_meetings
+  for all using (
+    exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid() and profiles.role = 'admin'
+    )
+  );
+
+
