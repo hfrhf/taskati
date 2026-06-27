@@ -923,6 +923,7 @@ export default function AvailabilityClient({
                                     value={opt.date}
                                     onChange={(val) => handlePollOptionChange(idx, 'date', val)}
                                     className="w-full"
+                                    align="right"
                                   />
                                 </div>
                                 <input 
@@ -1150,6 +1151,7 @@ export default function AvailabilityClient({
                     value={scheduleModal.date}
                     onChange={(val) => setScheduleModal(prev => ({ ...prev, date: val }))}
                     className="w-full"
+                    align="right"
                     direction="up"
                   />
                 </div>
