@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Header from '@/components/Header'
 import Toast from '@/components/Toast'
+import DatePicker from '@/components/DatePicker'
 import { 
   Clock, Info, ShieldCheck, Check, HelpCircle, XCircle, 
   Calendar, Users, MapPin, Video, Plus, Trash2, CheckSquare, 
@@ -917,12 +918,13 @@ export default function AvailabilityClient({
                           <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                             {newPollOptions.map((opt, idx) => (
                               <div key={idx} className="flex gap-2 items-center">
-                                <input 
-                                  type="date"
-                                  value={opt.date}
-                                  onChange={(e) => handlePollOptionChange(idx, 'date', e.target.value)}
-                                  className="w-1/2 bg-theme-input border border-theme-border rounded-lg p-1.5 text-[10px] text-theme-text focus:outline-none focus:border-theme-accent"
-                                />
+                                <div className="w-1/2">
+                                  <DatePicker 
+                                    value={opt.date}
+                                    onChange={(val) => handlePollOptionChange(idx, 'date', val)}
+                                    className="w-full"
+                                  />
+                                </div>
                                 <input 
                                   type="time"
                                   value={opt.time}
@@ -1144,12 +1146,10 @@ export default function AvailabilityClient({
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-theme-text-muted">تاريخ الاجتماع</label>
-                  <input 
-                    type="date"
+                  <DatePicker 
                     value={scheduleModal.date}
-                    onChange={(e) => setScheduleModal(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
-                    required
+                    onChange={(val) => setScheduleModal(prev => ({ ...prev, date: val }))}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1158,7 +1158,7 @@ export default function AvailabilityClient({
                     type="time"
                     value={scheduleModal.time}
                     onChange={(e) => setScheduleModal(prev => ({ ...prev, time: e.target.value }))}
-                    className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
+                    className="w-full bg-theme-input border border-theme-border rounded-xl px-3 py-2.5 text-xs text-theme-text focus:outline-none focus:border-theme-accent"
                     required
                   />
                 </div>
