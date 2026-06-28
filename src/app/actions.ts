@@ -1541,14 +1541,14 @@ export async function getIdeas() {
     .from('ideas')
     .select(`
       *,
-      user:profiles(name, avatar_url),
+      user:profiles!user_id(name, avatar_url),
       idea_upvotes(user_id),
       idea_comments(
         id,
         content,
         created_at,
         user_id,
-        user:profiles(name, avatar_url)
+        user:profiles!user_id(name, avatar_url)
       )
     `)
     .order('created_at', { ascending: false })
