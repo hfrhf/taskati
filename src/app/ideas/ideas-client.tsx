@@ -84,6 +84,7 @@ interface IdeasClientProps {
   initialMilestones: Milestone[]
   initialIdeas: Idea[]
   initialGroups: TaskGroup[]
+  dbError: string | null
 }
 
 const categories = [
@@ -113,7 +114,8 @@ export default function IdeasClient({
   teamProfiles, 
   initialMilestones, 
   initialIdeas,
-  initialGroups
+  initialGroups,
+  dbError
 }: IdeasClientProps) {
   const [ideas, setIdeas] = useState<Idea[]>(initialIdeas || [])
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -290,6 +292,21 @@ export default function IdeasClient({
 
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="space-y-6">
+
+          {dbError && (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-right text-rose-500 space-y-2">
+              <h3 className="text-sm font-black flex items-center gap-2 justify-start">
+                <span>⚠️ تنبيه: لم يتم إنشاء جداول الأفكار بعد</span>
+              </h3>
+              <p className="text-xs text-theme-text-muted leading-relaxed">
+                يبدو أنك لم تقم بتشغيل كود التهيئة الخاص بجداول الأفكار والعصف الذهني في قاعدة البيانات الخاصة بك. 
+                يرجى نسخ الكود المضاف في نهاية ملف <code className="bg-theme-bg px-1.5 py-0.5 rounded border border-theme-border font-mono text-[10px]">supabase_setup.sql</code> وتشغيله في الـ <b>SQL Editor</b> داخل لوحة تحكم Supabase لتفعيل الميزة بنجاح.
+              </p>
+              <p className="text-[9px] text-rose-400 font-mono">
+                تفاصيل الخطأ الفني: {dbError}
+              </p>
+            </div>
+          )}
 
           {/* العناوين وأزرار التحكم */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-theme-border pb-5 text-right">

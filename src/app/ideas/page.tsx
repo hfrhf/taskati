@@ -13,10 +13,21 @@ export default async function IdeasPage() {
 
   const teamProfiles = await getProfiles()
   const milestones = await getMilestones()
-  const initialIdeas = await getIdeas()
   
-  const todayStr = new Date().toISOString().split('T')[0]
-  const groups = await getGroups(todayStr)
+  let initialIdeas: any[] = []
+  let dbError: string | null = null
+  try {
+    initialIdeas = await getIdeas()
+  } catch (err: any) {
+    console.error('Error fetching ideas:', err)
+    dbError = err.message || 'فشل الاتصال بقاعدة البيانات'
+  }
+
+  let groups: any[] = []
+  try {
+    const todayStr = new Date().toISOString().split('T')[0]
+    groups = await getGroups(todayStr)
+  } catch (err) {}
 
   return (
     <IdeasClient 
@@ -25,6 +36,7 @@ export default async function IdeasPage() {
       initialMilestones={milestones}
       initialIdeas={initialIdeas}
       initialGroups={groups}
+      dbError={dbError}
     />
   )
 }
