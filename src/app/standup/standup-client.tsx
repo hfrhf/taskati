@@ -20,12 +20,14 @@ import {
   TrendingUp,
   Bell,
   BellOff,
-  XCircle
+  XCircle,
+  Pencil
 } from 'lucide-react'
 import { 
   getDailyStandups, submitDailyStandup, deleteDailyStandup, 
   savePushSubscription, deletePushSubscription,
-  toggleStandupReaction, addStandupComment, deleteStandupComment
+  toggleStandupReaction, addStandupComment, deleteStandupComment,
+  updateStandupComment
 } from '../actions'
 
 interface Profile {
@@ -137,6 +139,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
   const [replyContent, setReplyContent] = useState('')
   const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null)
   const [commentPending, setCommentPending] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
+  const [editingCommentContent, setEditingCommentContent] = useState('')
 
   // التحقق من حالة اشتراك الإشعارات للجهاز الحالي عند التحميل
   useEffect(() => {
@@ -302,13 +306,55 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
     alert: 'عقبة معطلة'
   }
 
-  // التعامل مع التفاعل
+  // التعامل مع التفاعل بشكل متفائل وفوري (Optimistic & Silent Update)
   const handleToggleReaction = async (standupId: string, reactionType: string) => {
+    const previousStandups = [...standups]
+
+    // تحديث الحالة محلياً وفورياً
+    setStandups((prevStandups) =>
+      prevStandups.map((s) => {
+        if (s.id !== standupId) return s
+
+        const currentReactions = s.reactions || []
+        const userReactionIdx = currentReactions.findIndex((r) => r.user_id === currentProfile.id)
+
+        let newReactions = [...currentReactions]
+        if (userReactionIdx > -1) {
+          const existing = currentReactions[userReactionIdx]
+          if (existing.reaction_type === reactionType) {
+            // إلغاء التفاعل عند الضغط مجدداً
+            newReactions.splice(userReactionIdx, 1)
+          } else {
+            // تعديل التفاعل
+            newReactions[userReactionIdx] = {
+              user_id: currentProfile.id,
+              reaction_type: reactionType
+            }
+          }
+        } else {
+          // تفاعل جديد
+          newReactions.push({
+            user_id: currentProfile.id,
+            reaction_type: reactionType
+          })
+        }
+
+        return {
+          ...s,
+          reactions: newReactions
+        }
+      })
+    )
+
     try {
       await toggleStandupReaction(standupId, reactionType)
-      fetchStandups(selectedDate)
+      // مزامنة صامتة للبيانات من السيرفر دون إشعار المستخدم لإبقاء الأرقام دقيقة
+      const data = await getDailyStandups(selectedDate)
+      setStandups(data as Standup[])
     } catch (err: any) {
-      showToast('فشل التفاعل: ' + err.message, 'error')
+      // التراجع عن التحديث المتفائل في حال الفشل
+      setStandups(previousStandups)
+      showToast('فشل تسجيل التفاعل: ' + err.message, 'error')
     }
   }
 
@@ -343,6 +389,23 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
       fetchStandups(selectedDate)
     } catch (err: any) {
       showToast('فشل حذف التعليق: ' + err.message, 'error')
+    }
+  }
+
+  // تعديل تعليق
+  const handleUpdateComment = async (commentId: string) => {
+    if (!editingCommentContent.trim()) return
+
+    try {
+      setCommentPending(true)
+      await updateStandupComment(commentId, editingCommentContent)
+      setEditingCommentId(null)
+      setEditingCommentContent('')
+      fetchStandups(selectedDate)
+    } catch (err: any) {
+      showToast('فشل تعديل التعليق: ' + err.message, 'error')
+    } finally {
+      setCommentPending(false)
     }
   }
 
@@ -818,14 +881,14 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
 
                         {/* شريط التفاعلات والتعليقات في كعب الكرت */}
                         <div className="border-t border-theme-border/60 pt-3 mt-1 flex items-center justify-between text-[11px] text-theme-text-muted">
-                          {/* ملخص التفاعلات */}
-                          <div className="flex items-center gap-1.5">
+                          {/* ملخص التفاعلات النشطة بزر التفاعل العائم */}
+                          <div className="flex items-center gap-3">
+                            {/* ملخص التفاعلات */}
                             {(() => {
                               const reactions = standup.reactions || []
-                              if (reactions.length === 0) return <span className="text-[10px] text-theme-text-muted/60">كن أول من يتفاعل 👍</span>
+                              if (reactions.length === 0) return null
                               
                               const uniqueTypes = Array.from(new Set(reactions.map(r => r.reaction_type))).slice(0, 3)
-                              const userReacted = reactions.some(r => r.user_id === currentProfile.id)
                               
                               return (
                                 <div className="flex items-center gap-1">
@@ -837,8 +900,55 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                                     ))}
                                   </div>
                                   <span className="font-bold text-[10px] text-theme-text-muted mr-1">
-                                    {reactions.length} {userReacted && '(تفاعلت)'}
+                                    {reactions.length}
                                   </span>
+                                </div>
+                              )
+                            })()}
+
+                            {/* زر التفاعل المباشر المحاكي لفيسبوك */}
+                            {(() => {
+                              const reactions = standup.reactions || []
+                              const currentUserReaction = reactions.find(r => r.user_id === currentProfile.id)
+                              
+                              return (
+                                <div className="relative group/react">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleToggleReaction(
+                                        standup.id, 
+                                        currentUserReaction ? currentUserReaction.reaction_type : 'like'
+                                      )
+                                    }}
+                                    className={`flex items-center gap-1 font-bold text-[10px] py-1 px-2.5 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                                      currentUserReaction 
+                                        ? 'bg-theme-accent/10 border-theme-accent text-theme-accent'
+                                        : 'bg-theme-bg border-theme-border text-theme-text-muted hover:text-theme-text hover:bg-theme-border'
+                                    }`}
+                                  >
+                                    <span>{currentUserReaction ? reactionEmojis[currentUserReaction.reaction_type] : '👍'}</span>
+                                    <span>{currentUserReaction ? reactionLabels[currentUserReaction.reaction_type] : 'تفاعل'}</span>
+                                  </button>
+
+                                  {/* القائمة العائمة المنبثقة للأعلى عند الحوم فوق زر تفاعل */}
+                                  <div className="absolute bottom-full mb-2 right-0 hidden group-hover/react:flex items-center gap-1.5 bg-theme-panel border border-theme-border rounded-full p-1.5 shadow-xl z-20 animate-modal-in select-none">
+                                    {Object.keys(reactionEmojis).map((type) => (
+                                      <button
+                                        key={type}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleToggleReaction(standup.id, type)
+                                        }}
+                                        className="text-base p-1.5 hover:scale-130 transition-all cursor-pointer"
+                                        title={reactionLabels[type]}
+                                      >
+                                        {reactionEmojis[type]}
+                                      </button>
+                                    ))}
+                                  </div>
                                 </div>
                               )
                             })()}
@@ -1052,6 +1162,7 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                       const commentReplies = replies.filter(r => r.parent_id === comment.id)
                       const isCommentOwner = comment.user_id === currentProfile.id || currentProfile.role === 'admin'
                       const isReplying = replyToCommentId === comment.id
+                      const isEditingComment = editingCommentId === comment.id
 
                       return (
                         <div key={comment.id} className="space-y-3 border-b border-theme-border/40 pb-3 last:border-b-0">
@@ -1070,19 +1181,72 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                                 </span>
                               </div>
 
-                              {isCommentOwner && (
-                                <button
-                                  onClick={() => handleDeleteComment(comment.id)}
-                                  className="text-rose-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
-                                  title="حذف التعليق"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <div className="flex items-center gap-1.5">
+                                {comment.user_id === currentProfile.id && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingCommentId(comment.id)
+                                      setEditingCommentContent(comment.content)
+                                    }}
+                                    className="text-neutral-500 hover:text-theme-accent p-1 rounded transition-colors cursor-pointer"
+                                    title="تعديل التعليق"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {isCommentOwner && (
+                                  <button
+                                    onClick={() => handleDeleteComment(comment.id)}
+                                    className="text-rose-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
+                                    title="حذف التعليق"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <p className="text-xs text-theme-text mt-2 pr-1 whitespace-pre-line leading-relaxed font-medium">
-                              {comment.content}
-                            </p>
+
+                            {isEditingComment ? (
+                              <form 
+                                onSubmit={(e) => {
+                                  e.preventDefault()
+                                  handleUpdateComment(comment.id)
+                                }}
+                                className="mt-2 flex gap-2 items-center"
+                              >
+                                <input 
+                                  type="text"
+                                  value={editingCommentContent}
+                                  onChange={(e) => setEditingCommentContent(e.target.value)}
+                                  className="flex-grow bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-1.5 text-xs transition-all outline-none"
+                                  required
+                                  autoFocus
+                                />
+                                <div className="flex gap-1">
+                                  <button
+                                    type="submit"
+                                    disabled={commentPending}
+                                    className="bg-theme-accent hover:opacity-90 text-theme-panel font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer"
+                                  >
+                                    حفظ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCommentId(null)
+                                      setEditingCommentContent('')
+                                    }}
+                                    className="bg-neutral-600 hover:bg-neutral-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer"
+                                  >
+                                    إلغاء
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <p className="text-xs text-theme-text mt-2 pr-1 whitespace-pre-line leading-relaxed font-medium">
+                                {comment.content}
+                              </p>
+                            )}
 
                             {/* زر الرد */}
                             <div className="mt-2 flex justify-end">
@@ -1100,6 +1264,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                             <div className="mr-8 border-r-2 border-theme-border/60 pr-4 space-y-2.5">
                               {commentReplies.map((reply) => {
                                 const isReplyOwner = reply.user_id === currentProfile.id || currentProfile.role === 'admin'
+                                const isEditingReply = editingCommentId === reply.id
+
                                 return (
                                   <div key={reply.id} className="bg-theme-bg/40 border border-theme-border/30 p-2.5 rounded-xl relative">
                                     <div className="flex items-center justify-between">
@@ -1115,19 +1281,72 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                                         </span>
                                       </div>
 
-                                      {isReplyOwner && (
-                                        <button
-                                          onClick={() => handleDeleteComment(reply.id)}
-                                          className="text-rose-400 hover:text-rose-600 p-0.5 rounded transition-colors cursor-pointer"
-                                          title="حذف الرد"
-                                        >
-                                          <Trash2 className="w-3 h-3" />
-                                        </button>
-                                      )}
+                                      <div className="flex items-center gap-1.5">
+                                        {reply.user_id === currentProfile.id && (
+                                          <button
+                                            onClick={() => {
+                                              setEditingCommentId(reply.id)
+                                              setEditingCommentContent(reply.content)
+                                            }}
+                                            className="text-neutral-500 hover:text-theme-accent p-1 rounded transition-colors cursor-pointer"
+                                            title="تعديل الرد"
+                                          >
+                                            <Pencil className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                        {isReplyOwner && (
+                                          <button
+                                            onClick={() => handleDeleteComment(reply.id)}
+                                            className="text-rose-400 hover:text-rose-600 p-0.5 rounded transition-colors cursor-pointer"
+                                            title="حذف الرد"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
                                     </div>
-                                    <p className="text-xs text-theme-text mt-1.5 pr-1 whitespace-pre-line leading-relaxed font-medium">
-                                      {reply.content}
-                                    </p>
+
+                                    {isEditingReply ? (
+                                      <form 
+                                        onSubmit={(e) => {
+                                          e.preventDefault()
+                                          handleUpdateComment(reply.id)
+                                        }}
+                                        className="mt-2 flex gap-2 items-center"
+                                      >
+                                        <input 
+                                          type="text"
+                                          value={editingCommentContent}
+                                          onChange={(e) => setEditingCommentContent(e.target.value)}
+                                          className="flex-grow bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-1.5 text-xs transition-all outline-none"
+                                          required
+                                          autoFocus
+                                        />
+                                        <div className="flex gap-1">
+                                          <button
+                                            type="submit"
+                                            disabled={commentPending}
+                                            className="bg-theme-accent hover:opacity-90 text-theme-panel font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer"
+                                          >
+                                            حفظ
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setEditingCommentId(null)
+                                              setEditingCommentContent('')
+                                            }}
+                                            className="bg-neutral-600 hover:bg-neutral-700 text-white font-bold px-2.5 py-1.5 rounded-lg text-[10px] transition-colors cursor-pointer"
+                                          >
+                                            إلغاء
+                                          </button>
+                                        </div>
+                                      </form>
+                                    ) : (
+                                      <p className="text-xs text-theme-text mt-1.5 pr-1 whitespace-pre-line leading-relaxed font-medium">
+                                        {reply.content}
+                                      </p>
+                                    )}
                                   </div>
                                 )
                               })}

@@ -1494,6 +1494,40 @@ export async function deleteStandupComment(commentId: string) {
   return { success: true }
 }
 
+// تعديل تعليق
+export async function updateStandupComment(commentId: string, content: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!content.trim()) throw new Error('محتوى التعليق لا يمكن أن يكون فارغاً')
+
+  const { data: comment, error: fetchErr } = await supabase
+    .from('standup_comments')
+    .select('user_id')
+    .eq('id', commentId)
+    .single()
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  // لا يمكن تعديل التعليق إلا لصاحب التعليق نفسه
+  if (comment.user_id !== profile.id) {
+    throw new Error('غير مصرح لك بتعديل هذا التعليق')
+  }
+
+  const { data: updatedComment, error: updateErr } = await supabase
+    .from('standup_comments')
+    .update({ content: content.trim() })
+    .eq('id', commentId)
+    .select()
+    .single()
+
+  if (updateErr) throw new Error(updateErr.message)
+
+  revalidatePath('/standup')
+  return updatedComment
+}
+
 
 
 
