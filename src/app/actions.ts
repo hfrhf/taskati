@@ -1741,6 +1741,72 @@ export async function convertIdeaToTask(
   return task
 }
 
+export async function updateIdea(ideaId: string, title: string, description: string, category: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!title.trim()) throw new Error('عنوان الفكرة مطلوب')
+
+  // التحقق من الملكية
+  const { data: idea, error: fetchErr } = await supabase
+    .from('ideas')
+    .select('user_id')
+    .eq('id', ideaId)
+    .single()
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  if (idea.user_id !== profile.id) {
+    throw new Error('غير مصرح لك بتعديل هذه الفكرة')
+  }
+
+  const { data, error } = await supabase
+    .from('ideas')
+    .update({
+      title: title.trim(),
+      description: description.trim(),
+      category
+    })
+    .eq('id', ideaId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/ideas')
+  return data
+}
+
+export async function deleteIdea(ideaId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  // التحقق من الملكية أو الصلاحية الإدارية
+  const { data: idea, error: fetchErr } = await supabase
+    .from('ideas')
+    .select('user_id')
+    .eq('id', ideaId)
+    .single()
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  if (idea.user_id !== profile.id && profile.role !== 'admin') {
+    throw new Error('غير مصرح لك بحذف هذه الفكرة')
+  }
+
+  const { error } = await supabase
+    .from('ideas')
+    .delete()
+    .eq('id', ideaId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/ideas')
+  return { success: true }
+}
+
 
 
 

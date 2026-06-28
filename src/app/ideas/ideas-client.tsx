@@ -17,7 +17,8 @@ import {
   Users, 
   Calendar,
   Layers,
-  Sparkles
+  Sparkles,
+  Edit2
 } from 'lucide-react'
 import { 
   getIdeas, 
@@ -25,7 +26,9 @@ import {
   toggleIdeaUpvote, 
   addIdeaComment, 
   deleteIdeaComment, 
-  convertIdeaToTask 
+  convertIdeaToTask,
+  updateIdea,
+  deleteIdea
 } from '../actions'
 
 interface Profile {
@@ -142,6 +145,18 @@ export default function IdeasClient({
   const [convertPending, setConvertPending] = useState(false)
 
   const [isPending, startTransition] = useTransition()
+
+  // تعديل الفكرة وحذفها
+  const [isEditingIdea, setIsEditingIdea] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [editCategory, setEditCategory] = useState('general')
+  const [editPending, setEditPending] = useState(false)
+
+  // إغلاق وضع التعديل عند غلق اللوح المنزلق أو تغيير الفكرة
+  useEffect(() => {
+    setIsEditingIdea(false)
+  }, [activeIdeaForSlideOver])
 
   // مزامنة اللوح المنزلق المفتوح مع أي تحديثات تطرأ على القائمة
   useEffect(() => {
@@ -272,6 +287,48 @@ export default function IdeasClient({
       showToast('فشل تحويل الفكرة لمهمة: ' + err.message, 'error')
     } finally {
       setConvertPending(false)
+    }
+  }
+
+  // تهيئة وتفعيل تعديل الفكرة
+  const handleStartEdit = () => {
+    if (!activeIdeaForSlideOver) return
+    setEditTitle(activeIdeaForSlideOver.title)
+    setEditDescription(activeIdeaForSlideOver.description || '')
+    setEditCategory(activeIdeaForSlideOver.category)
+    setIsEditingIdea(true)
+  }
+
+  // إجراء حفظ التعديلات على الفكرة
+  const handleUpdateIdea = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!activeIdeaForSlideOver || !editTitle.trim()) return
+
+    try {
+      setEditPending(true)
+      await updateIdea(activeIdeaForSlideOver.id, editTitle, editDescription, editCategory)
+      showToast('تمت تحديث الفكرة المقترحة بنجاح! ✏️', 'success')
+      setIsEditingIdea(false)
+      fetchIdeas()
+    } catch (err: any) {
+      showToast('فشل تعديل الفكرة: ' + err.message, 'error')
+    } finally {
+      setEditPending(false)
+    }
+  }
+
+  // إجراء حذف الفكرة
+  const handleDeleteIdea = async () => {
+    if (!activeIdeaForSlideOver) return
+    if (!window.confirm('هل أنت متأكد تماماً من حذف هذه الفكرة نهائياً؟ لا يمكن التراجع عن هذا الإجراء.')) return
+
+    try {
+      await deleteIdea(activeIdeaForSlideOver.id)
+      showToast('تم حذف الفكرة بنجاح.', 'success')
+      setActiveIdeaForSlideOver(null)
+      fetchIdeas()
+    } catch (err: any) {
+      showToast('فشل حذف الفكرة: ' + err.message, 'error')
     }
   }
 
@@ -477,42 +534,128 @@ export default function IdeasClient({
 
             {/* محتوى اللوح القابل للتمرير */}
             <div className="flex-grow overflow-y-auto p-6 space-y-6 scrollbar-hide">
-              {/* تفاصيل الفكرة */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${categoryMap[activeIdeaForSlideOver.category]?.color}`}>
-                    {categoryMap[activeIdeaForSlideOver.category]?.label}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${statusMap[activeIdeaForSlideOver.status]?.color}`}>
-                    {statusMap[activeIdeaForSlideOver.status]?.label}
-                  </span>
-                </div>
-
-                <h2 className="text-lg font-black text-theme-text leading-snug">
-                  {activeIdeaForSlideOver.title}
-                </h2>
-
-                <div className="flex items-center gap-2 bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-3">
-                  <img 
-                    src={activeIdeaForSlideOver.user.avatar_url}
-                    alt={activeIdeaForSlideOver.user.name}
-                    className="w-8 h-8 rounded-xl object-cover border border-theme-border"
-                  />
+              
+              {isEditingIdea ? (
+                /* وضع التعديل (Edit Mode Form) */
+                <form onSubmit={handleUpdateIdea} className="space-y-4">
                   <div>
-                    <p className="text-xs font-black text-theme-text leading-none">{activeIdeaForSlideOver.user.name}</p>
-                    <p className="text-[9px] text-theme-text-muted mt-1.5">
-                      تم الاقتراح في: {new Date(activeIdeaForSlideOver.created_at).toLocaleDateString('ar-EG', { month: 'long', day: 'numeric' })}
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">عنوان الفكرة المبتكرة <span className="text-rose-500">*</span></label>
+                    <input 
+                      type="text" 
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      required
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">التصنيف والفرع الفني <span className="text-rose-500">*</span></label>
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value)}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-bold"
+                    >
+                      <option value="general">💡 عام / شؤون إدارية</option>
+                      <option value="design">🎨 تصميم تجربة المستخدم والواجهات</option>
+                      <option value="tech">⚙️ برمجة وبنية تحتية</option>
+                      <option value="marketing">📢 تسويق ونمو وزيادة مستخدمين</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الشرح التفصيلي والملاحظات</label>
+                    <textarea
+                      rows={5}
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl p-4 text-xs transition-all outline-none resize-none leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex gap-3">
+                    <button 
+                      type="submit" 
+                      disabled={editPending}
+                      className="flex-grow bg-theme-accent hover:opacity-90 disabled:opacity-50 text-theme-panel font-bold py-3 rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      {editPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <span>حفظ التعديلات</span>
+                      )}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setIsEditingIdea(false)}
+                      className="px-5 bg-neutral-600 hover:bg-neutral-700 text-white font-bold rounded-xl text-xs transition-all cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                /* وضع العرض العادي (Default Details View) */
+                <div className="space-y-4">
+                  {/* أزرار تعديل وحذف الفكرة (تظهر لصاحب الفكرة أو المدير فقط) */}
+                  {(activeIdeaForSlideOver.user_id === currentProfile.id || currentProfile.role === 'admin') && (
+                    <div className="flex items-center gap-2 justify-end mb-1 border-b border-theme-border/40 pb-3">
+                      <button
+                        type="button"
+                        onClick={handleStartEdit}
+                        className="flex items-center gap-1.5 text-[10px] font-bold py-1.5 px-3 bg-theme-bg hover:bg-theme-border border border-theme-border text-theme-text rounded-xl transition-all cursor-pointer"
+                        title="تعديل الفكرة"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 text-theme-text-muted" />
+                        <span>تعديل</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDeleteIdea}
+                        className="flex items-center gap-1.5 text-[10px] font-bold py-1.5 px-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-500 rounded-xl transition-all cursor-pointer"
+                        title="حذف الفكرة"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>حذف</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${categoryMap[activeIdeaForSlideOver.category]?.color}`}>
+                      {categoryMap[activeIdeaForSlideOver.category]?.label}
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${statusMap[activeIdeaForSlideOver.status]?.color}`}>
+                      {statusMap[activeIdeaForSlideOver.status]?.label}
+                    </span>
+                  </div>
+
+                  <h2 className="text-lg font-black text-theme-text leading-snug">
+                    {activeIdeaForSlideOver.title}
+                  </h2>
+
+                  <div className="flex items-center gap-2 bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-3">
+                    <img 
+                      src={activeIdeaForSlideOver.user.avatar_url}
+                      alt={activeIdeaForSlideOver.user.name}
+                      className="w-8 h-8 rounded-xl object-cover border border-theme-border"
+                    />
+                    <div>
+                      <p className="text-xs font-black text-theme-text leading-none">{activeIdeaForSlideOver.user.name}</p>
+                      <p className="text-[9px] text-theme-text-muted mt-1.5">
+                        تم الاقتراح في: {new Date(activeIdeaForSlideOver.created_at).toLocaleDateString('ar-EG', { month: 'long', day: 'numeric' })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-theme-bg/25 border border-theme-border/50 rounded-2xl p-4 space-y-2">
+                    <p className="text-xs font-bold text-theme-text-muted">شرح المقترح:</p>
+                    <p className="text-xs text-theme-text leading-relaxed font-medium whitespace-pre-line">
+                      {activeIdeaForSlideOver.description || 'لا يوجد شرح إضافي.'}
                     </p>
                   </div>
                 </div>
-
-                <div className="bg-theme-bg/25 border border-theme-border/50 rounded-2xl p-4 space-y-2">
-                  <p className="text-xs font-bold text-theme-text-muted">شرح المقترح:</p>
-                  <p className="text-xs text-theme-text leading-relaxed font-medium whitespace-pre-line">
-                    {activeIdeaForSlideOver.description || 'لا يوجد شرح إضافي.'}
-                  </p>
-                </div>
-              </div>
+              )}
 
               {/* أزرار الإجراءات */}
               <div className="flex items-center gap-3 border-t border-b border-theme-border/60 py-4">
