@@ -694,7 +694,7 @@ export async function updateAvailabilitySlot(dayOfWeek: number, hour: number, st
   return { success: true }
 }
 
-// جلب تقارير اليوميات (daily standup) لتاريخ محدد
+// جلب تقارير اليوميات (daily standup) لتاريخ محدد مع تفاعلاتها وتعليقاتها
 export async function getDailyStandups(dateString: string) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
@@ -705,7 +705,9 @@ export async function getDailyStandups(dateString: string) {
     .select(`
       *,
       user:profiles(name, email, avatar_url),
-      milestone:project_milestones(id, title)
+      milestone:project_milestones(id, title),
+      reactions:standup_reactions(user_id, reaction_type),
+      comments:standup_comments(*, user:profiles(name, avatar_url))
     `)
     .eq('date', dateString)
 
@@ -1313,6 +1315,185 @@ export async function deleteScheduledMeeting(meetingId: string) {
   revalidatePath('/availability')
   return { success: true }
 }
+
+// 7. تفاعلات وتعليقات اللقاء اليومي (Daily Standup Reactions & Comments)
+
+// إضافة أو تعديل تفاعل إيموجي على تحديث يومي
+export async function toggleStandupReaction(standupId: string, reactionType: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  // التحقق من تفاعل المستخدم الحالي على هذه اليومية
+  const { data: existing, error: fetchErr } = await supabase
+    .from('standup_reactions')
+    .select('id, reaction_type')
+    .eq('standup_id', standupId)
+    .eq('user_id', profile.id)
+    .maybeSingle()
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  if (existing) {
+    if (existing.reaction_type === reactionType) {
+      // إذا نقر على نفس التفاعل، نقوم بحذفه (Toggle off)
+      const { error: deleteErr } = await supabase
+        .from('standup_reactions')
+        .delete()
+        .eq('id', existing.id)
+      if (deleteErr) throw new Error(deleteErr.message)
+    } else {
+      // إذا كان التفاعل مختلفاً، نقوم بتحديثه
+      const { error: updateErr } = await supabase
+        .from('standup_reactions')
+        .update({ reaction_type: reactionType })
+        .eq('id', existing.id)
+      if (updateErr) throw new Error(updateErr.message)
+    }
+  } else {
+    // إضافة تفاعل جديد
+    const { error: insertErr } = await supabase
+      .from('standup_reactions')
+      .insert({
+        standup_id: standupId,
+        user_id: profile.id,
+        reaction_type: reactionType
+      })
+    if (insertErr) throw new Error(insertErr.message)
+  }
+
+  revalidatePath('/standup')
+  return { success: true }
+}
+
+// إضافة تعليق جديد (رئيسي أو رد متداخل)
+export async function addStandupComment(standupId: string, content: string, parentId: string | null = null) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!content.trim()) throw new Error('محتوى التعليق فارغ')
+
+  const { data: comment, error: insertErr } = await supabase
+    .from('standup_comments')
+    .insert({
+      standup_id: standupId,
+      user_id: profile.id,
+      parent_id: parentId,
+      content: content.trim()
+    })
+    .select()
+    .single()
+
+  if (insertErr) throw new Error(insertErr.message)
+
+  // إرسال إشعار Push موجه
+  try {
+    const adminSupabase = createAdminClient()
+    
+    // جلب معلومات كاتب التقرير اليومي
+    const { data: standup } = await supabase
+      .from('daily_standups')
+      .select('user_id')
+      .eq('id', standupId)
+      .single()
+
+    if (standup) {
+      const targetUserIds = new Set<string>()
+      let notificationTitle = 'تعليق جديد 💬'
+      let notificationBody = `قام ${profile.name} بالتعليق على تحديثك اليومي.`
+
+      if (parentId) {
+        // هذا رد متداخل: جلب كاتب التعليق الأب لإرسال إشعار له
+        const { data: parentComment } = await supabase
+          .from('standup_comments')
+          .select('user_id')
+          .eq('id', parentId)
+          .single()
+
+        if (parentComment && parentComment.user_id !== profile.id) {
+          targetUserIds.add(parentComment.user_id)
+        }
+        
+        notificationTitle = 'رد جديد على تعليقك 💬'
+        notificationBody = `قام ${profile.name} بالرد على تعليقك في اللقاء اليومي.`
+
+        // نرسل أيضاً لصاحب التقرير اليومي إذا لم يكن هو كاتب الرد الحالي أو صاحب التعليق الأب
+        if (standup.user_id !== profile.id && (!parentComment || standup.user_id !== parentComment.user_id)) {
+          targetUserIds.add(standup.user_id)
+        }
+      } else {
+        // تعليق رئيسي جديد: نرسل لصاحب التقرير فقط
+        if (standup.user_id !== profile.id) {
+          targetUserIds.add(standup.user_id)
+        }
+      }
+
+      const targetList = Array.from(targetUserIds)
+      if (targetList.length > 0) {
+        const { data: subscriptions } = await adminSupabase
+          .from('push_subscriptions')
+          .select('id, user_id, subscription')
+          .in('user_id', targetList)
+
+        if (subscriptions && subscriptions.length > 0) {
+          const payload = JSON.stringify({
+            title: notificationTitle,
+            body: notificationBody,
+            url: '/standup'
+          })
+
+          const pushPromises = subscriptions.map(async (subRecord: any) => {
+            try {
+              await webpush.sendNotification(subRecord.subscription, payload)
+            } catch (pushErr: any) {
+              if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+                await adminSupabase.from('push_subscriptions').delete().eq('id', subRecord.id)
+              }
+            }
+          })
+          await Promise.allSettled(pushPromises)
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error sending comment push notification:', err)
+  }
+
+  revalidatePath('/standup')
+  return comment
+}
+
+// حذف تعليق
+export async function deleteStandupComment(commentId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data: comment, error: fetchErr } = await supabase
+    .from('standup_comments')
+    .select('user_id')
+    .eq('id', commentId)
+    .single()
+
+  if (fetchErr) throw new Error(fetchErr.message)
+
+  // لا يحذف التعليق إلا صاحبه أو الأدمن
+  if (profile.role !== 'admin' && comment.user_id !== profile.id) {
+    throw new Error('غير مصرح لك بحذف هذا التعليق')
+  }
+
+  const { error: deleteErr } = await supabase
+    .from('standup_comments')
+    .delete()
+    .eq('id', commentId)
+
+  if (deleteErr) throw new Error(deleteErr.message)
+
+  revalidatePath('/standup')
+  return { success: true }
+}
+
 
 
 

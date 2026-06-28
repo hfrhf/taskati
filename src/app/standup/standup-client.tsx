@@ -19,9 +19,14 @@ import {
   Trash2,
   TrendingUp,
   Bell,
-  BellOff
+  BellOff,
+  XCircle
 } from 'lucide-react'
-import { getDailyStandups, submitDailyStandup, deleteDailyStandup, savePushSubscription, deletePushSubscription } from '../actions'
+import { 
+  getDailyStandups, submitDailyStandup, deleteDailyStandup, 
+  savePushSubscription, deletePushSubscription,
+  toggleStandupReaction, addStandupComment, deleteStandupComment
+} from '../actions'
 
 interface Profile {
   id: string
@@ -53,6 +58,21 @@ interface Standup {
     email: string
     avatar_url: string
   }
+  reactions?: {
+    user_id: string
+    reaction_type: string
+  }[]
+  comments?: {
+    id: string
+    user_id: string
+    parent_id: string | null
+    content: string
+    created_at: string
+    user: {
+      name: string
+      avatar_url: string
+    }
+  }[]
 }
 
 interface Milestone {
@@ -110,6 +130,13 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
   // حالات إشعارات الويب اللحظية
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isSubscribing, setIsSubscribing] = useState(false)
+
+  // حالات المودال التفاعلي والتعليقات
+  const [activeStandupForModal, setActiveStandupForModal] = useState<Standup | null>(null)
+  const [mainCommentContent, setMainCommentContent] = useState('')
+  const [replyContent, setReplyContent] = useState('')
+  const [replyToCommentId, setReplyToCommentId] = useState<string | null>(null)
+  const [commentPending, setCommentPending] = useState(false)
 
   // التحقق من حالة اشتراك الإشعارات للجهاز الحالي عند التحميل
   useEffect(() => {
@@ -241,6 +268,83 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
   useEffect(() => {
     fetchStandups(selectedDate)
   }, [selectedDate])
+
+  // تأثير لمزامنة الكارت المفتوح بالبوباب مع القائمة المحدثة
+  useEffect(() => {
+    if (activeStandupForModal) {
+      const updated = standups.find(s => s.id === activeStandupForModal.id)
+      if (updated) {
+        setActiveStandupForModal(updated)
+      }
+    }
+  }, [standups])
+
+  // التفاعلات الثمانية وإيموجياتها وتسمياتها
+  const reactionEmojis: Record<string, string> = {
+    like: '👍',
+    heart: '❤️',
+    haha: '😂',
+    rocket: '🚀',
+    tada: '🎉',
+    eyes: '👀',
+    angry: '😡',
+    alert: '🚨'
+  }
+
+  const reactionLabels: Record<string, string> = {
+    like: 'أعجبني',
+    heart: 'حب',
+    haha: 'أضحكني',
+    rocket: 'انطلاق',
+    tada: 'تهنئة',
+    eyes: 'جاري الاطلاع',
+    angry: 'أغضبني',
+    alert: 'عقبة معطلة'
+  }
+
+  // التعامل مع التفاعل
+  const handleToggleReaction = async (standupId: string, reactionType: string) => {
+    try {
+      await toggleStandupReaction(standupId, reactionType)
+      fetchStandups(selectedDate)
+    } catch (err: any) {
+      showToast('فشل التفاعل: ' + err.message, 'error')
+    }
+  }
+
+  // التعامل مع إرسال التعليق
+  const handleCommentSubmit = async (parentId: string | null = null) => {
+    const content = parentId ? replyContent : mainCommentContent
+    if (!content.trim() || !activeStandupForModal) return
+
+    try {
+      setCommentPending(true)
+      await addStandupComment(activeStandupForModal.id, content, parentId)
+      if (parentId) {
+        setReplyContent('')
+        setReplyToCommentId(null)
+      } else {
+        setMainCommentContent('')
+      }
+      fetchStandups(selectedDate)
+    } catch (err: any) {
+      showToast('فشل إرسال التعليق: ' + err.message, 'error')
+    } finally {
+      setCommentPending(false)
+    }
+  }
+
+  // حذف تعليق
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm('هل أنت متأكد من رغبتك في حذف هذا التعليق؟')) return
+
+    try {
+      await deleteStandupComment(commentId)
+      fetchStandups(selectedDate)
+    } catch (err: any) {
+      showToast('فشل حذف التعليق: ' + err.message, 'error')
+    }
+  }
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -608,7 +712,8 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                     return (
                       <div
                         key={standup.id}
-                        className={`bg-theme-panel rounded-2xl p-5 border shadow-sm transition-all duration-200 flex flex-col gap-4 relative overflow-hidden ${
+                        onClick={() => setActiveStandupForModal(standup)}
+                        className={`bg-theme-panel rounded-2xl p-5 border shadow-sm transition-all duration-200 flex flex-col gap-4 relative overflow-hidden cursor-pointer hover:border-theme-accent/30 hover:shadow-md ${
                           hasBlockers 
                             ? 'border-rose-500/30 bg-gradient-to-br from-theme-panel to-rose-500/[0.02]' 
                             : 'border-theme-border'
@@ -711,6 +816,41 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                           </div>
                         )}
 
+                        {/* شريط التفاعلات والتعليقات في كعب الكرت */}
+                        <div className="border-t border-theme-border/60 pt-3 mt-1 flex items-center justify-between text-[11px] text-theme-text-muted">
+                          {/* ملخص التفاعلات */}
+                          <div className="flex items-center gap-1.5">
+                            {(() => {
+                              const reactions = standup.reactions || []
+                              if (reactions.length === 0) return <span className="text-[10px] text-theme-text-muted/60">كن أول من يتفاعل 👍</span>
+                              
+                              const uniqueTypes = Array.from(new Set(reactions.map(r => r.reaction_type))).slice(0, 3)
+                              const userReacted = reactions.some(r => r.user_id === currentProfile.id)
+                              
+                              return (
+                                <div className="flex items-center gap-1">
+                                  <div className="flex -space-x-1.5 space-x-reverse">
+                                    {uniqueTypes.map(type => (
+                                      <span key={type} className="text-xs" title={reactionLabels[type]}>
+                                        {reactionEmojis[type]}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <span className="font-bold text-[10px] text-theme-text-muted mr-1">
+                                    {reactions.length} {userReacted && '(تفاعلت)'}
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </div>
+
+                          {/* عدد التعليقات */}
+                          <div className="flex items-center gap-1 font-bold text-[10px] text-theme-text-muted">
+                            <MessageSquare className="w-3.5 h-3.5 text-neutral-500" />
+                            <span>{(standup.comments || []).length} تعليقات</span>
+                          </div>
+                        </div>
+
                         <div className="text-[9px] text-theme-text-muted self-end">
                           تم النشر في: {new Date(standup.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -753,6 +893,312 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
 
         </div>
       </main>
+
+      {/* مودال تفاعلات وتعليقات اللقاء اليومي */}
+      {activeStandupForModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-theme-panel border border-theme-border rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col text-right animate-modal-in overflow-hidden shadow-2xl relative">
+            
+            {/* رأس المودال */}
+            <div className="flex justify-between items-center border-b border-theme-border p-4 shrink-0">
+              <button 
+                onClick={() => {
+                  setActiveStandupForModal(null)
+                  setReplyToCommentId(null)
+                  setReplyContent('')
+                }}
+                className="text-neutral-500 hover:text-theme-text cursor-pointer p-0.5 rounded transition-colors"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+              <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-theme-accent" />
+                <span>تفاصيل التقرير اليومي والمناقشة</span>
+              </h3>
+            </div>
+
+            {/* محتوى المودال القابل للتمرير */}
+            <div className="p-6 overflow-y-auto flex-grow space-y-6">
+              
+              {/* تفاصيل صاحب اليومية */}
+              <div className="flex items-center justify-between gap-3 border-b border-theme-border/40 pb-4">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={activeStandupForModal.user.avatar_url}
+                    alt={activeStandupForModal.user.name}
+                    className="w-11 h-11 rounded-xl object-cover border border-theme-border"
+                  />
+                  <div>
+                    <h4 className="text-xs font-black text-theme-text">{activeStandupForModal.user.name}</h4>
+                    <div className="text-[10px] text-theme-text-muted mt-0.5">
+                      تاريخ التقرير: {activeStandupForModal.date} | النشر: {new Date(activeStandupForModal.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 justify-end">
+                  <span className={`text-[9px] font-bold px-2 py-1 rounded-lg border ${moodMap[activeStandupForModal.mood]?.color}`}>
+                    {moodMap[activeStandupForModal.mood]?.label}
+                  </span>
+                  <span className="text-[9px] font-bold px-2 py-1 rounded-lg bg-theme-bg text-theme-text border border-theme-border">
+                    {progressMap[activeStandupForModal.progress_rate]?.label}
+                  </span>
+                </div>
+              </div>
+
+              {/* أسئلة اليومية */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-theme-bg/30 border border-theme-border/40 rounded-xl p-3.5 space-y-1">
+                  <div className="text-[10px] font-black text-theme-text-muted">ماذا أنجز اليوم؟</div>
+                  <p className="text-xs text-theme-text leading-relaxed font-medium whitespace-pre-line">
+                    {activeStandupForModal.today_tasks}
+                  </p>
+                </div>
+                <div className="bg-theme-bg/30 border border-theme-border/40 rounded-xl p-3.5 space-y-1">
+                  <div className="text-[10px] font-black text-theme-text-muted">ماذا سيفعل غداً؟</div>
+                  <p className="text-xs text-theme-text leading-relaxed font-medium whitespace-pre-line">
+                    {activeStandupForModal.tomorrow_tasks}
+                  </p>
+                </div>
+              </div>
+
+              {/* العقبات إن وجدت */}
+              {activeStandupForModal.blockers?.trim() && (
+                <div className="bg-rose-500/[0.04] border border-rose-500/20 rounded-xl p-3.5 space-y-1">
+                  <div className="text-[10px] font-black text-rose-500 flex items-center gap-1">
+                    <AlertOctagon className="w-3.5 h-3.5 shrink-0" />
+                    <span>العقبات الحالية (Blockers)</span>
+                  </div>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 leading-relaxed font-bold whitespace-pre-line">
+                    {activeStandupForModal.blockers}
+                  </p>
+                </div>
+              )}
+
+              {/* 1. قسم تفاعلات الإيموجي (Facebook Style) */}
+              <div className="border-t border-b border-theme-border/60 py-4 space-y-3">
+                <div className="text-xs font-bold text-theme-text-muted">تفاعل مع هذا التقرير:</div>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  {/* شريط الإيموجي */}
+                  <div className="flex items-center gap-1.5 bg-theme-bg border border-theme-border/60 p-1.5 rounded-2xl">
+                    {Object.keys(reactionEmojis).map((type) => {
+                      const emoji = reactionEmojis[type]
+                      const label = reactionLabels[type]
+                      const userReacted = (activeStandupForModal.reactions || []).some(
+                        r => r.user_id === currentProfile.id && r.reaction_type === type
+                      )
+                      return (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => handleToggleReaction(activeStandupForModal.id, type)}
+                          className={`text-lg p-2 rounded-xl hover:bg-theme-panel hover:scale-125 transition-all cursor-pointer ${
+                            userReacted ? 'bg-theme-accent/15 border border-theme-accent/30 scale-110' : 'border border-transparent'
+                          }`}
+                          title={label}
+                        >
+                          {emoji}
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* قائمة المتفاعلين وأعدادهم */}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {activeStandupForModal.reactions && activeStandupForModal.reactions.length > 0 ? (
+                      activeStandupForModal.reactions.map((r, idx) => {
+                        const userName = teamProfiles.find(p => p.id === r.user_id)?.name || 'زميل'
+                        return (
+                          <span 
+                            key={idx} 
+                            className="bg-theme-bg border border-theme-border/60 text-[10px] font-bold text-theme-text px-2 py-1 rounded-lg flex items-center gap-1"
+                          >
+                            <span>{reactionEmojis[r.reaction_type]}</span>
+                            <span>{userName}</span>
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <span className="text-[10px] text-theme-text-muted">لا توجد تفاعلات بعد.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. قسم التعليقات والردود */}
+              <div className="space-y-4">
+                <div className="text-xs font-black text-theme-text flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-theme-accent" />
+                  <span>التعليقات والمناقشات ({(activeStandupForModal.comments || []).length})</span>
+                </div>
+
+                {/* قائمة التعليقات الشجرية */}
+                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                  {(() => {
+                    const comments = activeStandupForModal.comments || []
+                    if (comments.length === 0) {
+                      return (
+                        <p className="text-center text-xs text-theme-text-muted py-6">
+                          لا توجد تعليقات بعد. اكتب تعليقك أدناه لبدء النقاش!
+                        </p>
+                      )
+                    }
+
+                    // فصل التعليقات الرئيسية عن الردود
+                    const mainComments = comments.filter(c => !c.parent_id).sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                    const replies = comments.filter(c => c.parent_id).sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+
+                    return mainComments.map((comment) => {
+                      const commentReplies = replies.filter(r => r.parent_id === comment.id)
+                      const isCommentOwner = comment.user_id === currentProfile.id || currentProfile.role === 'admin'
+                      const isReplying = replyToCommentId === comment.id
+
+                      return (
+                        <div key={comment.id} className="space-y-3 border-b border-theme-border/40 pb-3 last:border-b-0">
+                          {/* التعليق الرئيسي */}
+                          <div className="bg-theme-bg/25 border border-theme-border/40 p-3 rounded-2xl relative">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <img
+                                  src={comment.user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100'}
+                                  alt={comment.user?.name}
+                                  className="w-6 h-6 rounded-md object-cover"
+                                />
+                                <span className="text-[11px] font-black text-theme-text">{comment.user?.name}</span>
+                                <span className="text-[9px] text-theme-text-muted">
+                                  {new Date(comment.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+
+                              {isCommentOwner && (
+                                <button
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  className="text-rose-400 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer"
+                                  title="حذف التعليق"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs text-theme-text mt-2 pr-1 whitespace-pre-line leading-relaxed font-medium">
+                              {comment.content}
+                            </p>
+
+                            {/* زر الرد */}
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                onClick={() => setReplyToCommentId(isReplying ? null : comment.id)}
+                                className="text-[10px] text-theme-accent hover:text-theme-accent-hover font-black flex items-center gap-1 cursor-pointer"
+                              >
+                                <span>{isReplying ? 'إلغاء الرد' : 'رد على التعليق'}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* الردود المتداخلة (Level 2) */}
+                          {commentReplies.length > 0 && (
+                            <div className="mr-8 border-r-2 border-theme-border/60 pr-4 space-y-2.5">
+                              {commentReplies.map((reply) => {
+                                const isReplyOwner = reply.user_id === currentProfile.id || currentProfile.role === 'admin'
+                                return (
+                                  <div key={reply.id} className="bg-theme-bg/40 border border-theme-border/30 p-2.5 rounded-xl relative">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <img
+                                          src={reply.user?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=100'}
+                                          alt={reply.user?.name}
+                                          className="w-5.5 h-5.5 rounded-md object-cover"
+                                        />
+                                        <span className="text-[10px] font-black text-theme-text">{reply.user?.name}</span>
+                                        <span className="text-[8px] text-theme-text-muted">
+                                          {new Date(reply.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+
+                                      {isReplyOwner && (
+                                        <button
+                                          onClick={() => handleDeleteComment(reply.id)}
+                                          className="text-rose-400 hover:text-rose-600 p-0.5 rounded transition-colors cursor-pointer"
+                                          title="حذف الرد"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-theme-text mt-1.5 pr-1 whitespace-pre-line leading-relaxed font-medium">
+                                      {reply.content}
+                                    </p>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+
+                          {/* حقل إدخال الرد المتداخل */}
+                          {isReplying && (
+                            <div className="mr-8 pr-4">
+                              <form 
+                                onSubmit={(e) => {
+                                  e.preventDefault()
+                                  handleCommentSubmit(comment.id)
+                                }} 
+                                className="flex gap-2 items-center"
+                              >
+                                <input
+                                  type="text"
+                                  value={replyContent}
+                                  onChange={(e) => setReplyContent(e.target.value)}
+                                  placeholder={`اكتب ردك على ${comment.user?.name}...`}
+                                  className="flex-grow bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none leading-relaxed"
+                                  required
+                                  autoFocus
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={commentPending}
+                                  className="bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold px-4 py-2 rounded-xl text-xs transition-colors flex items-center justify-center cursor-pointer shadow-sm disabled:opacity-50"
+                                >
+                                  {commentPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                                </button>
+                              </form>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+
+                {/* حقل إدخال تعليق رئيسي جديد */}
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleCommentSubmit(null)
+                  }} 
+                  className="pt-2 border-t border-theme-border/60 flex gap-2 items-start shrink-0"
+                >
+                  <textarea
+                    rows={1.5}
+                    value={mainCommentContent}
+                    onChange={(e) => setMainCommentContent(e.target.value)}
+                    placeholder="اكتب تعليقاً رئيسياً جديداً..."
+                    className="flex-grow bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl p-3 text-xs transition-all outline-none resize-none leading-relaxed"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={commentPending}
+                    className="bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold p-3.5 rounded-xl text-xs transition-colors flex items-center justify-center cursor-pointer shadow-sm disabled:opacity-50 mt-1 shrink-0"
+                  >
+                    {commentPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* عرض الرسائل العائمة */}
       {toast && (

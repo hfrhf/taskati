@@ -404,4 +404,41 @@ create policy "Allow admins full access to scheduled_meetings" on public.schedul
     )
   );
 
+-- 15. إنشاء جدول تفاعلات اللقاء اليومي (standup_reactions)
+create table if not exists public.standup_reactions (
+  id uuid default gen_random_uuid() primary key,
+  standup_id uuid references public.daily_standups(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  reaction_type text not null check (reaction_type in ('like', 'heart', 'haha', 'rocket', 'tada', 'eyes', 'angry', 'alert')),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique (standup_id, user_id)
+);
+
+alter table public.standup_reactions enable row level security;
+
+create policy "Allow all authenticated users to read standup_reactions" on public.standup_reactions
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow users to manage their own reactions" on public.standup_reactions
+  for all using (auth.uid() = user_id);
+
+-- 16. إنشاء جدول تعليقات اللقاء اليومي المتداخلة (standup_comments)
+create table if not exists public.standup_comments (
+  id uuid default gen_random_uuid() primary key,
+  standup_id uuid references public.daily_standups(id) on delete cascade not null,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  parent_id uuid references public.standup_comments(id) on delete cascade default null,
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.standup_comments enable row level security;
+
+create policy "Allow all authenticated users to read standup_comments" on public.standup_comments
+  for select using (auth.role() = 'authenticated');
+
+create policy "Allow users to manage their own comments" on public.standup_comments
+  for all using (auth.uid() = user_id);
+
+
 
