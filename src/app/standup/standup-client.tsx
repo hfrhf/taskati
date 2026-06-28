@@ -933,21 +933,23 @@ export default function StandupClient({ currentProfile, teamProfiles, initialMil
                                   </button>
 
                                   {/* القائمة العائمة المنبثقة للأعلى عند الحوم فوق زر تفاعل */}
-                                  <div className="absolute bottom-full mb-2 right-0 hidden group-hover/react:flex items-center gap-1.5 bg-theme-panel border border-theme-border rounded-full p-1.5 shadow-xl z-20 animate-modal-in select-none">
-                                    {Object.keys(reactionEmojis).map((type) => (
-                                      <button
-                                        key={type}
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleToggleReaction(standup.id, type)
-                                        }}
-                                        className="text-base p-1.5 hover:scale-130 transition-all cursor-pointer"
-                                        title={reactionLabels[type]}
-                                      >
-                                        {reactionEmojis[type]}
-                                      </button>
-                                    ))}
+                                  <div className="absolute bottom-full pb-2 right-0 hidden group-hover/react:flex flex-col items-center z-20 animate-modal-in select-none">
+                                    <div className="flex items-center gap-1.5 bg-theme-panel border border-theme-border rounded-full p-1.5 shadow-xl">
+                                      {Object.keys(reactionEmojis).map((type) => (
+                                        <button
+                                          key={type}
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleToggleReaction(standup.id, type)
+                                          }}
+                                          className="text-base p-1.5 hover:scale-130 transition-all cursor-pointer"
+                                          title={reactionLabels[type]}
+                                        >
+                                          {reactionEmojis[type]}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
                                 </div>
                               )
