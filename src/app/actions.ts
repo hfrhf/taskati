@@ -29,6 +29,10 @@ export async function getCurrentUserProfile() {
     .eq('id', user.id)
     .single()
 
+  if (profile) {
+    profile.role = 'admin' // Force user to be admin for personal single-user capabilities
+  }
+
   return profile
 }
 
