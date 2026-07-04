@@ -53,6 +53,7 @@ interface TaskClientProps {
   initialFiles: TaskFile[]
   teamProfiles: Profile[]
   milestones: Milestone[]
+  youtubeVideos: any[]
 }
 
 const statusMap: Record<string, string> = {
@@ -73,7 +74,7 @@ const colorClassMap: Record<string, { card: string; badge: string }> = {
   'pastel-neutral': { card: 'bg-orange-500/10 border-orange-500/20 text-theme-text', badge: 'bg-orange-500/20 text-orange-400' }
 }
 
-export default function TaskDetailClient({ currentProfile, initialTask, initialFiles, teamProfiles, milestones }: TaskClientProps) {
+export default function TaskDetailClient({ currentProfile, initialTask, initialFiles, teamProfiles, milestones, youtubeVideos = [] }: TaskClientProps) {
   const router = useRouter()
   const [task, setTask] = useState(initialTask)
   const [files, setFiles] = useState<TaskFile[]>(initialFiles)
@@ -125,6 +126,13 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
     const title = formData.get('title') as string
     const description = formData.get('description') as string
     const assignedTo = formData.get('assigned_to') as string
+    
+    // سحب حقول الوقت المخصص وقنات اليوتيوب
+    const workHours = parseInt(formData.get('work_hours') as string || '0')
+    const workMins = parseInt(formData.get('work_mins') as string || '0')
+    const workMinutes = workHours * 60 + workMins
+    const videoId = (formData.get('video_id') as string) || null
+    const videoPhase = (formData.get('video_phase') as string) || null
 
     try {
       setIsSavingDetails(true)
@@ -135,13 +143,18 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
         taskMilestoneId || null,
         assignedTo || null,
         taskDueDate,
-        taskColor
+        taskColor,
+        workMinutes,
+        videoId,
+        videoPhase
       )
 
       // البحث عن المسؤول في قائمة الفريق لتحديث الاسم والصورة بالواجهة
       const selectedAssignee = teamProfiles.find(p => p.id === assignedTo)
       // البحث عن المحطة الاستراتيجية لتحديث الشارات بالواجهة
       const selectedMilestone = milestones.find(m => m.id === taskMilestoneId)
+      // البحث عن الفيديو المرتبط
+      const selectedVideo = youtubeVideos.find(v => v.id === videoId)
 
       setTask({
         ...task,
@@ -152,7 +165,11 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
         assigned_to: assignedTo || null,
         assignee: selectedAssignee ? { name: selectedAssignee.name, email: selectedAssignee.email, avatar_url: selectedAssignee.avatar_url } : null,
         due_date: taskDueDate,
-        color: taskColor
+        color: taskColor,
+        work_minutes: workMinutes,
+        video_id: videoId,
+        video_phase: videoPhase,
+        video: selectedVideo ? { id: selectedVideo.id, title: selectedVideo.title } : null
       })
 
       showToast('تم حفظ التعديلات بنجاح', 'success')
@@ -251,14 +268,36 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-theme-border pb-5">
               <div>
                 <h2 className="text-lg font-bold text-theme-text">{task.title}</h2>
-                <p className="text-[11px] text-theme-text-muted mt-1">
-                  المسؤول: <strong className="text-theme-text">{task.assignee ? task.assignee.name : 'غير محدد'}</strong> | تاريخ الاستحقاق: {task.due_date}
-                </p>
-                {task.milestone && (
-                  <span className="inline-block text-[10px] text-theme-accent bg-theme-accent/10 px-2.5 py-0.5 rounded-md mt-2 font-bold">
-                    🎯 المحطة الكبرى: {task.milestone.title}
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="text-[11px] text-theme-text-muted">
+                    تاريخ الاستحقاق: <strong className="text-theme-text">{task.due_date || 'غير حدد'}</strong>
                   </span>
-                )}
+                  
+                  {task.work_minutes > 0 && (
+                    <span className="bg-indigo-500/10 text-indigo-400 px-2.5 py-0.5 rounded-md font-bold text-[10px] flex items-center gap-1 border border-indigo-500/20">
+                      ⏱️ {Math.floor(task.work_minutes / 60)}س {task.work_minutes % 60}د
+                    </span>
+                  )}
+
+                  {task.video_id && (
+                    <span className="bg-rose-500/10 text-rose-450 px-2.5 py-0.5 rounded-md font-bold text-[10px] border border-rose-500/20 flex items-center gap-1">
+                      🎬 {task.video?.title ? `فيديو: ${task.video.title}` : 'فيديو مرتبط'} 
+                      <span className="text-theme-text-muted">|</span>
+                      <span>
+                        {task.video_phase === 'scripting' ? 'كتابة السيناريو ✍️' : 
+                         task.video_phase === 'recording' ? 'التصوير والتسجيل 🎙️' : 
+                         task.video_phase === 'editing' ? 'المونتاج والتحريك 🎬' : 
+                         task.video_phase === 'publishing' ? 'الغلاف والنشر 🎨' : 'عمل آخر'}
+                      </span>
+                    </span>
+                  )}
+
+                  {task.milestone && (
+                    <span className="inline-block text-[10px] text-theme-accent bg-theme-accent/10 border border-theme-accent/20 px-2.5 py-0.5 rounded-md font-bold">
+                      🎯 المحطة الكبرى: {task.milestone.title}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-start">
@@ -409,22 +448,46 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                 ></textarea>
               </div>
 
+              <input type="hidden" name="assigned_to" value={currentProfile.id} />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المسؤول عن المهمة</label>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الوقت المستغرق (ساعة)</label>
+                  <input 
+                    type="number" 
+                    name="work_hours" 
+                    min="0"
+                    defaultValue={Math.floor((task.work_minutes || 0) / 60)}
+                    placeholder="ساعات"
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الوقت المستغرق (دقيقة)</label>
+                  <input 
+                    type="number" 
+                    name="work_mins" 
+                    min="0"
+                    max="59"
+                    defaultValue={(task.work_minutes || 0) % 60}
+                    placeholder="دقائق"
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
                   <select 
-                    name="assigned_to"
-                    required
-                    defaultValue={task.assigned_to || ''}
+                    name="video_id"
+                    defaultValue={task.video_id || ''}
                     className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
                   >
-                    {currentProfile.role === 'admin' ? (
-                      teamProfiles.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))
-                    ) : (
-                      <option value={currentProfile.id}>{currentProfile.name}</option>
-                    )}
+                    <option value="">عمل عام / غير مرتبط بفيديو</option>
+                    {youtubeVideos.map(v => (
+                      <option key={v.id} value={v.id}>🎬 {v.title}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -437,6 +500,21 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                     direction="up"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
+                <select 
+                  name="video_phase"
+                  defaultValue={task.video_phase || 'other'}
+                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                >
+                  <option value="other">أخرى / عمل عام</option>
+                  <option value="scripting">✍️ السيناريو والكتابة</option>
+                  <option value="recording">🎙️ التصوير والتسجيل</option>
+                  <option value="editing">🎬 المونتاج والتحريك</option>
+                  <option value="publishing">🎨 الغلاف والنشر</option>
+                </select>
               </div>
 
               <div>

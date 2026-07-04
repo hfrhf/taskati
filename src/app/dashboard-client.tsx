@@ -53,6 +53,7 @@ interface DashboardClientProps {
   currentProfile: Profile
   teamProfiles: Profile[]
   initialMilestones: Milestone[]
+  youtubeVideos?: any[]
 }
 
 // خريطة ترجمة الألوان للفئات المعتمدة في التصميم الفاخر
@@ -94,7 +95,7 @@ const colorClassMap: Record<string, { card: string; badge: string; border: strin
   }
 }
 
-export default function DashboardClient({ currentProfile, teamProfiles, initialMilestones }: DashboardClientProps) {
+export default function DashboardClient({ currentProfile, teamProfiles, initialMilestones, youtubeVideos = [] }: DashboardClientProps) {
   const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones || [])
   
   // حالة التاريخ المختار
@@ -288,9 +289,12 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
     const color = formData.get('color') as string
     const milestoneId = formData.get('milestone_id') as string
 
+    const videoId = formData.get('video_id') as string || null
+    const videoPhase = formData.get('video_phase') as string || null
+
     try {
-      await addTask(title, description, activeGroupId, assignedTo, dueDate, color, milestoneId || undefined)
-      showToast('تم إسناد المهمة بنجاح وجاري المتابعة مع الفريق', 'success')
+      await addTask(title, description, activeGroupId, assignedTo, dueDate, color, milestoneId || undefined, 0, videoId, videoPhase)
+      showToast('تمت إضافة المهمة بنجاح لقائمة اليوم 🚀', 'success')
       setIsTaskModalOpen(false)
       form.reset()
       fetchTasksList()
@@ -345,23 +349,8 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
     }
   }
 
-  // تصفية مجموعات العمل للآدمن
-  const getFilteredGroups = () => {
-    if (currentProfile.role !== 'admin') {
-      return groups
-    }
-    if (activeTab === 'my-groups') {
-      return groups.filter(g => !g.assigned_to || g.created_by === currentProfile.id || g.assigned_to === currentProfile.id)
-    }
-    if (activeTab === 'all-groups') {
-      return groups
-    }
-    // تصفية المجموعات حسب عضو معين
-    return groups.filter(g => g.created_by === activeTab || g.assigned_to === activeTab)
-  }
-
-  const filteredGroups = getFilteredGroups()
-  const selectedPartner = teamProfiles.find(u => u.id === activeTab)
+  // تصفية مجموعات العمل (موقرة للمستخدم الحالي فقط)
+  const filteredGroups = groups
 
   return (
     <div className="flex-grow flex flex-col min-h-screen pb-24 md:pb-8">
@@ -398,114 +387,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
               </div>
             </div>
 
-            {/* شريط تبويبات الفلترة المخصص للأدمن */}
-            {currentProfile.role === 'admin' && groups.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-theme-border/40 text-right">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('my-groups')
-                    setIsPartnerDropdownOpen(false)
-                  }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'my-groups'
-                      ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
-                      : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
-                  }`}
-                >
-                  مجموعاتي
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('all-groups')
-                    setIsPartnerDropdownOpen(false)
-                  }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    activeTab === 'all-groups'
-                      ? 'bg-theme-accent text-theme-panel shadow-md shadow-theme-accent/15'
-                      : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border border-theme-border'
-                  }`}
-                >
-                  كل المجموعات
-                </button>
-
-                {/* قائمة الشركاء المنسدلة الذكية */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setIsPartnerDropdownOpen(!isPartnerDropdownOpen)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                      activeTab !== 'my-groups' && activeTab !== 'all-groups'
-                        ? 'bg-theme-accent text-theme-panel border-transparent shadow-md shadow-theme-accent/15'
-                        : 'bg-theme-panel hover:bg-theme-bg text-theme-text-muted hover:text-theme-text border-theme-border'
-                    }`}
-                  >
-                    {selectedPartner ? (
-                      <>
-                        <img 
-                          src={selectedPartner.avatar_url} 
-                          alt={selectedPartner.name} 
-                          className="w-4 h-4 rounded-md object-cover border border-theme-panel/20 shrink-0" 
-                        />
-                        <span className="truncate max-w-[110px] sm:max-w-[160px]">مجموعات: {selectedPartner.name}</span>
-                        <ChevronDown className="w-3.5 h-3.5 opacity-80 shrink-0" />
-                      </>
-                    ) : (
-                      <>
-                        <span>مجموعات الشركاء</span>
-                        <ChevronDown className="w-3.5 h-3.5 opacity-60 shrink-0" />
-                      </>
-                    )}
-                  </button>
-
-                  {isPartnerDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setIsPartnerDropdownOpen(false)}></div>
-                      <div className="absolute left-0 right-auto mt-2 w-52 bg-theme-panel border border-theme-border rounded-2xl shadow-xl py-2 z-50 animate-modal-in max-h-64 overflow-y-auto custom-scrollbar">
-                        <p className="px-4 py-1 text-[9px] font-bold text-theme-text-muted select-none">اختر شريكاً لعرض مجموعاته</p>
-                        <div className="h-px bg-theme-border my-1"></div>
-                        
-                        {teamProfiles
-                          .filter(u => u.id !== currentProfile.id)
-                          .map(u => {
-                            const hasGroupsToday = groups.some(g => g.created_by === u.id || g.assigned_to === u.id)
-                            const isSelected = activeTab === u.id
-
-                            return (
-                              <button
-                                key={u.id}
-                                type="button"
-                                onClick={() => {
-                                  setActiveTab(u.id)
-                                  setIsPartnerDropdownOpen(false)
-                                }}
-                                className={`w-full flex items-center justify-between px-4 py-2.5 text-xs font-bold transition-colors hover:bg-theme-bg cursor-pointer text-right ${
-                                  isSelected ? 'text-theme-accent bg-theme-accent/5' : 'text-theme-text'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <img 
-                                    src={u.avatar_url} 
-                                    alt={u.name} 
-                                    className="w-4.5 h-4.5 rounded-lg object-cover border border-theme-border shrink-0" 
-                                  />
-                                  <span className="truncate">{u.name}</span>
-                                </div>
-                                
-                                {hasGroupsToday && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                )}
-                              </button>
-                            )
-                          })}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* تم إخفاء تبويبات الفلترة لكون التطبيق مخصصاً للمستخدم الشخصي */}
 
             {/* شبكة كروت المجموعات */}
             {isLoadingGroups ? (
@@ -741,9 +623,20 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                       </div>
 
                       <div className="mt-4 pt-3 border-t border-theme-border flex items-center justify-between text-[10px] text-theme-text-muted">
-                        <div className="flex items-center gap-1">
-                          <span className="font-semibold text-theme-text">المسؤول:</span>
-                          <span>{task.assignee ? task.assignee.name : 'غير محدد'}</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {task.work_minutes > 0 && (
+                            <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md font-bold text-[9px] flex items-center gap-1 border border-indigo-500/20">
+                              ⏱️ {Math.floor(task.work_minutes / 60)}س {task.work_minutes % 60}د
+                            </span>
+                          )}
+                          {task.video_id && (
+                            <span className="bg-rose-500/10 text-rose-450 px-2 py-0.5 rounded-md font-bold text-[9px] border border-rose-500/20">
+                              🎬 {task.video_phase === 'scripting' ? 'سيناريو' : 
+                                  task.video_phase === 'recording' ? 'تصوير' : 
+                                  task.video_phase === 'editing' ? 'مونتاج' : 
+                                  task.video_phase === 'publishing' ? 'غلاف ونشر' : 'عمل آخر'}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span>الموعد: {task.due_date}</span>
@@ -794,20 +687,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                 />
               </div>
 
-              {currentProfile.role === 'admin' && (
-                <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">إسناد المجموعة إلى</label>
-                  <select 
-                    name="assigned_to"
-                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer"
-                  >
-                    <option value="">مجموعة عمل عامة للجميع</option>
-                    {teamProfiles.map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role === 'admin' ? 'مدير' : 'مستخدم'})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <input type="hidden" name="assigned_to" value={currentProfile.id} />
 
               <div>
                 <label className="block text-xs font-bold text-theme-text-muted mb-2">اختر لون المجموعة:</label>
@@ -899,21 +779,19 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                 ></textarea>
               </div>
 
+              <input type="hidden" name="assigned_to" value={currentProfile.id} />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المسؤول عن المهمة</label>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
                   <select 
-                    name="assigned_to"
-                    required
-                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer"
+                    name="video_id"
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
                   >
-                    {currentProfile.role === 'admin' ? (
-                      teamProfiles.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))
-                    ) : (
-                      <option value={currentProfile.id}>{currentProfile.name}</option>
-                    )}
+                    <option value="">عمل عام / غير مرتبط بفيديو</option>
+                    {youtubeVideos.map(v => (
+                      <option key={v.id} value={v.id}>🎬 {v.title}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -926,6 +804,20 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                     direction="up"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
+                <select 
+                  name="video_phase"
+                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                >
+                  <option value="other">أخرى / عمل عام</option>
+                  <option value="scripting">✍️ السيناريو والكتابة</option>
+                  <option value="recording">🎙️ التصوير والتسجيل</option>
+                  <option value="editing">🎬 المونتاج والتحريك</option>
+                  <option value="publishing">🎨 الغلاف والنشر</option>
+                </select>
               </div>
 
               <div>
@@ -1037,21 +929,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                 />
               </div>
 
-              {currentProfile.role === 'admin' && (
-                <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">إسناد المجموعة إلى</label>
-                  <select 
-                    name="assigned_to"
-                    defaultValue={groupToEdit.assigned_to || ''}
-                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer"
-                  >
-                    <option value="">مجموعة عمل عامة للجميع</option>
-                    {teamProfiles.map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role === 'admin' ? 'مدير' : 'مستخدم'})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <input type="hidden" name="assigned_to" value={currentProfile.id} />
 
               <div>
                 <label className="block text-xs font-bold text-theme-text-muted mb-2">اختر لون المجموعة:</label>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import { Play, Pause, RotateCcw, X, Minimize2, Maximize2, Timer } from 'lucide-react'
+import { Play, Pause, RotateCcw, X, Minimize2, Timer } from 'lucide-react'
 
 export default function ChronoWidget() {
   const pathname = usePathname()
@@ -13,8 +13,8 @@ export default function ChronoWidget() {
   // إخفاء العداد في صفحة تسجيل الدخول
   if (pathname === '/login') return null
 
-  // تحميل حالة المؤقت عند بدء التشغيل
-  useEffect(() => {
+  // دالة لمزامنة حالة المؤقت من localStorage
+  const syncState = () => {
     try {
       const running = localStorage.getItem('chrono_is_running') === 'true'
       const mode = (localStorage.getItem('chrono_display_mode') || 'closed') as 'closed' | 'open' | 'minimized'
@@ -27,21 +27,40 @@ export default function ChronoWidget() {
           const currentElapsed = Math.floor((Date.now() - startTime) / 1000) + elapsedBefore
           setTime(currentElapsed)
           setIsRunning(true)
-          // إذا كان المؤقت يعمل، نفتحه بوضع مصغر تلقائياً لتنبيه المستخدم
-          setDisplayMode(mode === 'closed' ? 'minimized' : mode)
+          setDisplayMode(prev => prev === 'closed' ? 'minimized' : prev)
         }
       } else {
         const elapsed = parseInt(localStorage.getItem('chrono_elapsed') || '0', 10)
         setTime(elapsed)
         setIsRunning(false)
-        setDisplayMode(mode)
+        // لا تغير وضع العرض تلقائياً عند الإيقاف المؤقت
       }
     } catch (e) {
-      console.error('[ChronoWidget] Load state error:', e)
+      console.error('[ChronoWidget] Sync state error:', e)
+    }
+  }
+
+  // تحميل ومراقبة حالة المؤقت
+  useEffect(() => {
+    syncState()
+
+    // الاستماع لأي تغييرات تحدث في صفحة /timer أو تابات أخرى
+    window.addEventListener('chrono-state-changed', syncState)
+    window.addEventListener('storage', syncState)
+
+    // قراءة وضع العرض المخزن عند أول تحميل
+    try {
+      const mode = localStorage.getItem('chrono_display_mode') as 'closed' | 'open' | 'minimized'
+      if (mode) setDisplayMode(mode)
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('chrono-state-changed', syncState)
+      window.removeEventListener('storage', syncState)
     }
   }, [])
 
-  // الحفاظ على تشغيل العداد وتحديثه
+  // الحفاظ على تشغيل العداد وتحديثه في الخلفية
   useEffect(() => {
     let intervalId: any = null
 
@@ -63,6 +82,11 @@ export default function ChronoWidget() {
     }
   }, [isRunning])
 
+  // إرسال حدث مخصص للمزامنة اللحظية مع تابات و صفحات أخرى
+  const dispatchStateChange = () => {
+    window.dispatchEvent(new CustomEvent('chrono-state-changed'))
+  }
+
   // حفظ حالة وضع العرض عند تغييره
   const changeDisplayMode = (newMode: 'closed' | 'open' | 'minimized') => {
     setDisplayMode(newMode)
@@ -80,6 +104,7 @@ export default function ChronoWidget() {
       localStorage.setItem('chrono_start_time', now.toString())
       localStorage.setItem('chrono_elapsed_before', time.toString())
     } catch (e) {}
+    dispatchStateChange()
   }
 
   // إيقاف مؤقت
@@ -89,6 +114,7 @@ export default function ChronoWidget() {
       localStorage.setItem('chrono_is_running', 'false')
       localStorage.setItem('chrono_elapsed', time.toString())
     } catch (e) {}
+    dispatchStateChange()
   }
 
   // تصفير العداد
@@ -101,6 +127,7 @@ export default function ChronoWidget() {
       localStorage.setItem('chrono_start_time', '0')
       localStorage.setItem('chrono_elapsed_before', '0')
     } catch (e) {}
+    dispatchStateChange()
   }
 
   // تنسيق الوقت المكتوب (ساعات:دقائق:ثواني)
@@ -109,7 +136,7 @@ export default function ChronoWidget() {
     const mins = Math.floor((totalSeconds % 3600) / 60)
     const secs = totalSeconds % 60
     return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  };
+  }
 
   // تنسيق وقت مصغر (دقائق:ثواني أو ساعات:دقائق)
   const formatCompactTime = (totalSeconds: number) => {
@@ -120,7 +147,7 @@ export default function ChronoWidget() {
       return `${hrs}س ${mins}د`
     }
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  };
+  }
 
   // حساب طول الدائرة لثانية التحديث (حلقة الدوران)
   const radius = 40
@@ -163,13 +190,13 @@ export default function ChronoWidget() {
   }
 
   return (
-    <div className="fixed bottom-24 left-4 md:bottom-6 md:left-6 z-50 w-64 bg-theme-panel/90 backdrop-blur-md border border-theme-border rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] text-right animate-modal-in select-none">
+    <div className="fixed bottom-24 left-4 md:bottom-6 md:left-6 z-50 w-64 bg-theme-panel/95 backdrop-blur-md border border-theme-border rounded-3xl p-5 shadow-[0_20px_50px_rgba(0,0,0,0.3)] text-right animate-modal-in select-none">
       
       {/* الترويسة وأزرار التحكم بالوضع */}
       <div className="flex items-center justify-between gap-4 border-b border-theme-border/50 pb-2 mb-4">
         <span className="text-[10px] font-bold text-theme-text-muted flex items-center gap-1">
-          <Timer className="w-3.5 h-3.5 text-theme-accent" />
-          <span>عداد ساعات العمل</span>
+          <Timer className="w-3.5 h-3.5 text-theme-accent animate-pulse" />
+          <span>مؤقت الإنتاجية الطائر</span>
         </span>
         
         <div className="flex items-center gap-1">
@@ -190,10 +217,9 @@ export default function ChronoWidget() {
         </div>
       </div>
 
-      {/* حلقة المؤقت الدائرية الفخمة */}
+      {/* حلقة المؤقت الدائرية */}
       <div className="relative w-36 h-36 mx-auto flex items-center justify-center my-4">
         <svg className="w-full h-full transform -rotate-90">
-          {/* حلقة الخلفية الباهتة */}
           <circle
             cx="72"
             cy="72"
@@ -201,9 +227,8 @@ export default function ChronoWidget() {
             fill="transparent"
             stroke="var(--theme-border)"
             strokeWidth="4"
-            className="opacity-40"
+            className="opacity-45"
           />
-          {/* حلقة التقدم النشطة */}
           <circle
             cx="72"
             cy="72"
@@ -216,12 +241,11 @@ export default function ChronoWidget() {
             strokeLinecap="round"
             className="transition-all duration-300"
             style={{
-              filter: isRunning ? 'drop-shadow(0 0 2px var(--theme-accent))' : 'none'
+              filter: isRunning ? 'drop-shadow(0 0 3px var(--theme-accent))' : 'none'
             }}
           />
         </svg>
         
-        {/* الوقت المكتوب في المنتصف */}
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           <span className="font-mono text-lg font-black text-theme-text tracking-tight">
             {formatTime(time)}
@@ -233,33 +257,46 @@ export default function ChronoWidget() {
       </div>
 
       {/* أزرار التحكم بالعداد */}
-      <div className="flex items-center justify-center gap-3 pt-2">
-        <button
-          onClick={handleReset}
-          className="flex-1 bg-theme-bg hover:bg-theme-border border border-theme-border text-theme-text-muted hover:text-theme-text font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
-          title="إعادة تعيين العداد"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>تصفير</span>
-        </button>
-
-        {isRunning ? (
+      <div className="flex flex-col gap-2 pt-2">
+        <div className="flex items-center justify-center gap-3">
           <button
-            onClick={handlePause}
-            className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/10"
-            title="إيقاف مؤقت"
+            onClick={handleReset}
+            className="flex-1 bg-theme-bg hover:bg-theme-border border border-theme-border text-theme-text-muted hover:text-theme-text font-bold py-2 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            title="إعادة تعيين العداد"
           >
-            <Pause className="w-3.5 h-3.5" />
-            <span>إيقاف</span>
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>تصفير</span>
           </button>
-        ) : (
+
+          {isRunning ? (
+            <button
+              onClick={handlePause}
+              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-amber-500/10"
+              title="إيقاف مؤقت"
+            >
+              <Pause className="w-3.5 h-3.5" />
+              <span>إيقاف</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleStart}
+              className="flex-1 bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold py-2 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-theme-accent/15"
+              title="بدء الحساب"
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>بدء</span>
+            </button>
+          )}
+        </div>
+
+        {time > 0 && (
           <button
-            onClick={handleStart}
-            className="flex-1 bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-theme-accent/15"
-            title="بدء الحساب"
+            onClick={() => {
+              window.location.href = '/timer?save=true'
+            }}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shadow-md shadow-indigo-500/10 mt-1"
           >
-            <Play className="w-3.5 h-3.5" />
-            <span>بدء</span>
+            <span>📥 تسجيل الوقت على مهمة</span>
           </button>
         )}
       </div>

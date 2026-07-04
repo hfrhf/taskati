@@ -248,7 +248,10 @@ export async function addTask(
   assignedTo: string,
   dueDate: string,
   color: string,
-  milestoneId?: string | null
+  milestoneId?: string | null,
+  workMinutes?: number,
+  videoId?: string | null,
+  videoPhase?: string | null
 ) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
@@ -262,7 +265,10 @@ export async function addTask(
     due_date: dueDate,
     color,
     status: 'not_started',
-    milestone_id: milestoneId || null
+    milestone_id: milestoneId || null,
+    work_minutes: workMinutes || 0,
+    video_id: videoId || null,
+    video_phase: videoPhase || null
   }
 
   const { data, error } = await supabase
@@ -274,6 +280,7 @@ export async function addTask(
   if (error) throw new Error(error.message)
   revalidatePath('/')
   revalidatePath('/roadmap')
+  revalidatePath('/youtube')
   return data
 }
 
@@ -322,7 +329,10 @@ export async function updateTaskDetails(
   milestoneId?: string | null,
   assignedTo?: string | null,
   dueDate?: string | null,
-  color?: string | null
+  color?: string | null,
+  workMinutes?: number,
+  videoId?: string | null,
+  videoPhase?: string | null
 ) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
@@ -337,6 +347,9 @@ export async function updateTaskDetails(
   if (assignedTo !== undefined) updateData.assigned_to = assignedTo || null
   if (dueDate !== undefined) updateData.due_date = dueDate
   if (color !== undefined) updateData.color = color
+  if (workMinutes !== undefined) updateData.work_minutes = workMinutes
+  if (videoId !== undefined) updateData.video_id = videoId || null
+  if (videoPhase !== undefined) updateData.video_phase = videoPhase || null
 
   const { error } = await supabase
     .from('tasks')
@@ -346,6 +359,7 @@ export async function updateTaskDetails(
   if (error) throw new Error(error.message)
   revalidatePath('/')
   revalidatePath('/roadmap')
+  revalidatePath('/youtube')
   return { success: true }
 }
 
@@ -960,74 +974,159 @@ export async function getMonthlyAnalytics(month: number, year: number) {
   const lastDay = new Date(year, month, 0).getDate()
   const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-  // 1. جلب كافة الأعضاء
-  const { data: teamProfiles, error: profilesError } = await supabase
-    .from('profiles')
-    .select('id, name, email, avatar_url, role')
-    .order('name', { ascending: true })
-
-  if (profilesError) throw new Error(profilesError.message)
-
-  // 2. جلب كافة التقارير اليومية للشهر المحدد
+  // 1. جلب التقارير اليومية للمستخدم الحالي في هذا الشهر
   const { data: standups, error: standupsError } = await supabase
     .from('daily_standups')
-    .select('user_id, date, work_minutes, productivity_score')
+    .select('date, work_minutes, productivity_score, mood')
+    .eq('user_id', profile.id)
     .gte('date', startDate)
     .lte('date', endDate)
 
   if (standupsError) throw new Error(standupsError.message)
 
-  // 3. جلب كافة المهام المكتملة في هذا الشهر
+  // 2. جلب كافة المهام المكتملة في هذا الشهر للمستخدم الحالي
   const { data: tasks, error: tasksError } = await supabase
     .from('tasks')
-    .select('assigned_to, completed_date, title')
+    .select(`
+      id,
+      title,
+      completed_date,
+      work_minutes,
+      color,
+      group_id,
+      group:task_groups(id, name, color)
+    `)
+    .eq('assigned_to', profile.id)
     .eq('status', 'completed')
     .gte('completed_date', startDate)
     .lte('completed_date', endDate)
 
   if (tasksError) throw new Error(tasksError.message)
 
-  // 4. تجميع البيانات لكل موظف
-  const userStats = (teamProfiles || []).map((u) => {
-    const userStandups = (standups || []).filter((s) => s.user_id === u.id)
-    const userTasks = (tasks || []).filter((t) => t.assigned_to === u.id)
+  // 3. حساب إجمالي ساعات المهام وساعات اليوميات
+  const totalJournalMinutes = (standups || []).reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+  const totalTaskMinutes = (tasks || []).reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+  
+  const totalJournalHours = Math.round((totalJournalMinutes / 60) * 10) / 10
+  const totalTaskHours = Math.round((totalTaskMinutes / 60) * 10) / 10
+  
+  const daysLogged = (standups || []).length
+  const avgProductivity = daysLogged > 0
+    ? Math.round(((standups || []).reduce((sum, s) => sum + s.productivity_score, 0) / daysLogged) * 10) / 10
+    : 0
 
-    const totalMinutes = userStandups.reduce((sum, s) => sum + (s.work_minutes || 0), 0)
-    const totalDays = userStandups.length
-    const avgProductivity = totalDays > 0 
-      ? Math.round((userStandups.reduce((sum, s) => sum + s.productivity_score, 0) / totalDays) * 10) / 10
-      : 0
+  // 4. توزيع الوقت على المشاريع / مجموعات العمل (للرسم البياني)
+  const groupHoursMap: Record<string, { name: string; color: string; minutes: number }> = {}
+  
+  // نجمع الدقائق من جميع مهام المستخدم (المكتملة والجارية في هذا الشهر)
+  const { data: allUserTasks } = await supabase
+    .from('tasks')
+    .select('work_minutes, group:task_groups(id, name, color)')
+    .eq('assigned_to', profile.id)
+    .gte('due_date', startDate)
+    .lte('due_date', endDate)
 
-    return {
-      userId: u.id,
-      name: u.name,
-      email: u.email,
-      avatarUrl: u.avatar_url,
-      role: u.role,
-      totalMinutes,
-      totalHours: Math.round((totalMinutes / 60) * 10) / 10,
-      completedTasksCount: userTasks.length,
-      daysLogged: totalDays,
-      avgProductivity,
-      tasks: userTasks.map(t => t.title)
+  if (allUserTasks) {
+    allUserTasks.forEach((task: any) => {
+      if (task.work_minutes > 0 && task.group) {
+        const groupId = task.group.id
+        if (!groupHoursMap[groupId]) {
+          groupHoursMap[groupId] = {
+            name: task.group.name,
+            color: task.group.color,
+            minutes: 0
+          }
+        }
+        groupHoursMap[groupId].minutes += task.work_minutes
+      }
+    })
+  }
+
+  const groupDistribution = Object.values(groupHoursMap).map(g => ({
+    name: g.name,
+    color: g.color,
+    totalMinutes: g.minutes,
+    totalHours: Math.round((g.minutes / 60) * 10) / 10
+  })).filter(g => g.totalHours > 0)
+
+  // 5. جلب إحصائيات الشهر السابق للمقارنة
+  const prevMonth = month === 1 ? 12 : month - 1
+  const prevYear = month === 1 ? year - 1 : year
+  const prevStartDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
+  const prevLastDay = new Date(prevYear, prevMonth, 0).getDate()
+  const prevEndDate = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDay).padStart(2, '0')}`
+
+  // الشهر السابق: المهام واليوميات
+  const { data: prevStandups } = await supabase
+    .from('daily_standups')
+    .select('work_minutes')
+    .eq('user_id', profile.id)
+    .gte('date', prevStartDate)
+    .lte('date', prevEndDate)
+
+  const { data: prevTasks } = await supabase
+    .from('tasks')
+    .select('work_minutes')
+    .eq('assigned_to', profile.id)
+    .eq('status', 'completed')
+    .gte('completed_date', prevStartDate)
+    .lte('completed_date', prevEndDate)
+
+  const prevJournalMinutes = (prevStandups || []).reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+  const prevTaskMinutes = (prevTasks || []).reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+  
+  const prevJournalHours = Math.round((prevJournalMinutes / 60) * 10) / 10
+  const prevTaskHours = Math.round((prevTaskMinutes / 60) * 10) / 10
+  const prevCompletedCount = (prevTasks || []).length
+
+  // 6. تقسيم تفصيلي يومي للشهر الحالي (Daily activity list)
+  const dailyBreakdown: Record<string, { date: string; workMinutes: number; journalMinutes: number; tasksCount: number; productivityScore: number; mood: string }> = {}
+  
+  // تهيئة الأيام
+  for (let d = 1; d <= lastDay; d++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    dailyBreakdown[dateStr] = {
+      date: dateStr,
+      workMinutes: 0,
+      journalMinutes: 0,
+      tasksCount: 0,
+      productivityScore: 0,
+      mood: ''
+    }
+  }
+
+  // ملء بيانات اليوميات
+  (standups || []).forEach(s => {
+    if (dailyBreakdown[s.date]) {
+      dailyBreakdown[s.date].journalMinutes = s.work_minutes
+      dailyBreakdown[s.date].productivityScore = s.productivity_score
+      dailyBreakdown[s.date].mood = s.mood
+    }
+  });
+
+  // ملء بيانات المهام المكتملة
+  (tasks || []).forEach(t => {
+    if (t.completed_date && dailyBreakdown[t.completed_date]) {
+      dailyBreakdown[t.completed_date].workMinutes += t.work_minutes
+      dailyBreakdown[t.completed_date].tasksCount += 1
     }
   })
 
-  // 5. حساب إجمالي الفريق
-  const teamTotalMinutes = userStats.reduce((sum, u) => sum + u.totalMinutes, 0)
-  const teamCompletedTasks = userStats.reduce((sum, u) => sum + u.completedTasksCount, 0)
-  const loggedUsersCount = userStats.filter(u => u.daysLogged > 0).length
-  const teamAvgProductivity = loggedUsersCount > 0
-    ? Math.round((userStats.filter(u => u.daysLogged > 0).reduce((sum, u) => sum + u.avgProductivity, 0) / loggedUsersCount) * 10) / 10
-    : 0
-
   return {
-    userStats,
-    teamSummary: {
-      totalHours: Math.round((teamTotalMinutes / 60) * 10) / 10,
-      completedTasksCount: teamCompletedTasks,
-      avgProductivity: teamAvgProductivity
-    }
+    personalSummary: {
+      totalJournalHours,
+      totalTaskHours,
+      completedTasksCount: (tasks || []).length,
+      daysLogged,
+      avgProductivity,
+      comparison: {
+        hoursDiff: Math.round((totalTaskHours - prevTaskHours) * 10) / 10,
+        tasksDiff: (tasks || []).length - prevCompletedCount,
+        journalDiff: Math.round((totalJournalHours - prevJournalHours) * 10) / 10
+      }
+    },
+    groupDistribution,
+    dailyBreakdown: Object.values(dailyBreakdown).reverse() // من الأحدث للأقدم
   }
 }
 
@@ -1842,6 +1941,359 @@ export async function deleteIdea(ideaId: string) {
 
   revalidatePath('/ideas')
   return { success: true }
+}
+
+// --------------------------------------------------------------------
+// 18. عمليات ستوديو اليوتيوب لقناة baron | بارون (YouTube Studio Actions)
+// --------------------------------------------------------------------
+
+export async function getYoutubeVideos() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  // جلب كافة الفيديوهات
+  const { data: videos, error } = await supabase
+    .from('youtube_videos')
+    .select('*')
+    .eq('user_id', profile.id)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  if (!videos || videos.length === 0) return []
+
+  // جلب إحصائيات المهام وساعات العمل لكل فيديو
+  const videosWithStats = await Promise.all(
+    videos.map(async (video) => {
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('id, status, work_minutes')
+        .eq('video_id', video.id)
+
+      const totalTasks = tasks?.length || 0
+      const completedTasks = tasks?.filter(t => t.status === 'completed').length || 0
+      const totalMinutes = tasks?.reduce((sum, t) => sum + (t.work_minutes || 0), 0) || 0
+      const totalHours = Math.round((totalMinutes / 60) * 10) / 10
+
+      return {
+        ...video,
+        totalTasks,
+        completedTasks,
+        totalHours,
+        progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+      }
+    })
+  )
+
+  return videosWithStats
+}
+
+export async function getYoutubeVideoDetails(videoId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  // جلب تفاصيل الفيديو
+  const { data: video, error } = await supabase
+    .from('youtube_videos')
+    .select('*')
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .single()
+
+  if (error) throw new Error('الفيديو غير موجود')
+
+  // جلب المهام المرتبطة بالفيديو
+  const { data: tasks, error: tasksError } = await supabase
+    .from('tasks')
+    .select(`
+      *,
+      group:task_groups(id, name, color),
+      milestone:project_milestones(id, title)
+    `)
+    .eq('video_id', videoId)
+    .order('created_at', { ascending: true })
+
+  if (tasksError) throw new Error(tasksError.message)
+
+  // حساب توزيع الوقت على مراحل الإنتاج
+  const phases = {
+    scripting: { name: 'السيناريو والكتابة ✍️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
+    recording: { name: 'التصوير والتسجيل 🎙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
+    editing: { name: 'المونتاج والتحريك 🎬', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
+    publishing: { name: 'الغلاف والنشر 🎨', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
+    other: { name: 'أعمال أخرى ⚙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 }
+  }
+
+  const tasksList = tasks || [];
+  tasksList.forEach((t: any) => {
+    const phaseKey = (t.video_phase || 'other') as keyof typeof phases
+    if (phases[phaseKey]) {
+      phases[phaseKey].minutes += t.work_minutes || 0
+      phases[phaseKey].tasksCount += 1
+      if (t.status === 'completed') {
+        phases[phaseKey].completedCount += 1
+      }
+    }
+  })
+
+  // تحويل الدقائق إلى ساعات وتدويرها
+  Object.keys(phases).forEach((key) => {
+    const k = key as keyof typeof phases
+    phases[k].hours = Math.round((phases[k].minutes / 60) * 10) / 10
+  })
+
+  const totalMinutes = tasksList.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+  const totalHours = Math.round((totalMinutes / 60) * 10) / 10
+  const completedTasks = tasksList.filter(t => t.status === 'completed').length
+  const progress = tasksList.length > 0 ? Math.round((completedTasks / tasksList.length) * 100) : 0
+
+  return {
+    video: {
+      ...video,
+      totalHours,
+      totalTasks: tasksList.length,
+      completedTasks,
+      progress
+    },
+    phases,
+    tasks: tasksList
+  }
+}
+
+export async function createYoutubeVideo(
+  title: string,
+  description: string,
+  thumbnailUrl: string,
+  targetHours: number = 0
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!title.trim()) throw new Error('عنوان الفيديو مطلوب')
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .insert({
+      title: title.trim(),
+      description: description.trim(),
+      thumbnail_url: thumbnailUrl.trim() || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?q=80&w=300&auto=format&fit=crop',
+      target_hours: targetHours,
+      user_id: profile.id,
+      status: 'planning'
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  return data
+}
+
+export async function updateYoutubeVideo(
+  videoId: string,
+  title: string,
+  description: string,
+  thumbnailUrl: string,
+  status: 'planning' | 'in_progress' | 'completed' | 'published',
+  targetHours: number
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const updateData: any = {
+    title: title.trim(),
+    description: description.trim(),
+    thumbnail_url: thumbnailUrl.trim(),
+    status,
+    target_hours: targetHours
+  }
+
+  if (status === 'published' || status === 'completed') {
+    updateData.completed_at = new Date().toISOString()
+  } else {
+    updateData.completed_at = null
+  }
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .update(updateData)
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  revalidatePath(`/youtube/${videoId}`)
+  return data
+}
+
+export async function deleteYoutubeVideo(videoId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { error } = await supabase
+    .from('youtube_videos')
+    .delete()
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  return { success: true }
+}
+
+export async function getYoutubeAnalytics() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  // جلب كافة الفيديوهات
+  const { data: videos } = await supabase
+    .from('youtube_videos')
+    .select('*')
+    .eq('user_id', profile.id)
+
+  if (!videos || videos.length === 0) {
+    return {
+      totalVideos: 0,
+      completedVideosCount: 0,
+      totalHours: 0,
+      avgHoursPerVideo: 0,
+      phaseAverages: {
+        scripting: 0,
+        recording: 0,
+        editing: 0,
+        publishing: 0
+      },
+      mostTimeConsumingPhase: 'لا توجد بيانات',
+      videoStats: []
+    }
+  }
+
+  let totalMinutesSum = 0
+  let scriptingMinutes = 0
+  let recordingMinutes = 0
+  let editingMinutes = 0
+  let publishingMinutes = 0
+  let completedVideosCount = 0
+
+  const videoStats = await Promise.all(
+    videos.map(async (video) => {
+      const { data: tasks } = await supabase
+        .from('tasks')
+        .select('work_minutes, video_phase')
+        .eq('video_id', video.id)
+
+      const minutes = tasks?.reduce((sum, t) => sum + (t.work_minutes || 0), 0) || 0
+      totalMinutesSum += minutes
+
+      if (video.status === 'published' || video.status === 'completed') {
+        completedVideosCount += 1
+      }
+
+      tasks?.forEach((t) => {
+        const mins = t.work_minutes || 0
+        if (t.video_phase === 'scripting') scriptingMinutes += mins
+        else if (t.video_phase === 'recording') recordingMinutes += mins
+        else if (t.video_phase === 'editing') editingMinutes += mins
+        else if (t.video_phase === 'publishing') publishingMinutes += mins
+      })
+
+      return {
+        title: video.title,
+        hours: Math.round((minutes / 60) * 10) / 10,
+        status: video.status
+      }
+    })
+  )
+
+  const divisor = completedVideosCount || videos.length || 1
+  const phaseAverages = {
+    scripting: Math.round(((scriptingMinutes / divisor) / 60) * 10) / 10,
+    recording: Math.round(((recordingMinutes / divisor) / 60) * 10) / 10,
+    editing: Math.round(((editingMinutes / divisor) / 60) * 10) / 10,
+    publishing: Math.round(((publishingMinutes / divisor) / 60) * 10) / 10
+  }
+
+  // تحديد أطول مرحلة وقتاً
+  const phasesArr = [
+    { key: 'scripting', name: 'السيناريو والكتابة ✍️', val: scriptingMinutes },
+    { key: 'recording', name: 'التصوير والتسجيل 🎙️', val: recordingMinutes },
+    { key: 'editing', name: 'المونتاج والتحريك 🎬', val: editingMinutes },
+    { key: 'publishing', name: 'الغلاف والنشر 🎨', val: publishingMinutes }
+  ]
+  phasesArr.sort((a, b) => b.val - a.val)
+  const mostTimeConsumingPhase = phasesArr[0].val > 0 ? phasesArr[0].name : 'لا توجد بيانات'
+
+  return {
+    totalVideos: videos.length,
+    completedVideosCount,
+    totalHours: Math.round((totalMinutesSum / 60) * 10) / 10,
+    avgHoursPerVideo: Math.round(((totalMinutesSum / divisor) / 60) * 10) / 10,
+    phaseAverages,
+    mostTimeConsumingPhase,
+    videoStats
+  }
+}
+
+export async function getUserActiveTasks() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(`
+      id,
+      title,
+      status,
+      work_minutes,
+      group:task_groups(id, name, color)
+    `)
+    .eq('assigned_to', profile.id)
+    .neq('status', 'completed')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function logTaskMinutes(taskId: string, minutes: number) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data: task, error: fetchError } = await supabase
+    .from('tasks')
+    .select('work_minutes')
+    .eq('id', taskId)
+    .single()
+
+  if (fetchError || !task) throw new Error('المهمة غير موجودة')
+
+  const currentMinutes = task.work_minutes || 0
+  const newMinutes = currentMinutes + minutes
+
+  const { data, error } = await supabase
+    .from('tasks')
+    .update({ work_minutes: newMinutes })
+    .eq('id', taskId)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/')
+  revalidatePath(`/task/${taskId}`)
+  return data
 }
 
 

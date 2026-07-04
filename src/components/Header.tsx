@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LogOut, Users, Calendar, FolderKanban, Edit2, Loader2, Clock, Palette, Download, MessageSquare, TrendingUp, BarChart3, Lightbulb } from 'lucide-react'
+import { LogOut, Users, Calendar, FolderKanban, Edit2, Loader2, Clock, Palette, Download, MessageSquare, TrendingUp, BarChart3, Lightbulb, Video } from 'lucide-react'
 import { logout } from '@/app/login/actions'
 import { updateProfile } from '@/app/actions'
 
@@ -261,7 +261,18 @@ export default function Header({ user }: HeaderProps) {
               }`}
             >
               <MessageSquare className="w-4 h-4" />
-              <span>اللقاء اليومي</span>
+              <span>يوميات الإنتاجية</span>
+            </Link>
+            <Link 
+              href="/youtube" 
+              className={`flex items-center gap-1.5 pb-1 transition-all border-b-2 ${
+                isActive('/youtube') 
+                  ? 'text-theme-text border-theme-accent font-bold' 
+                  : 'text-theme-text-muted hover:text-theme-text border-transparent'
+              }`}
+            >
+              <Video className="w-4 h-4" />
+              <span>ستوديو بارون</span>
             </Link>
             <Link 
               href="/ideas" 
@@ -306,7 +317,7 @@ export default function Header({ user }: HeaderProps) {
                 <div className="text-right hidden sm:block">
                   <p className="text-xs font-bold text-theme-text">{user.name}</p>
                   <p className="text-[10px] text-theme-text-muted font-medium">
-                    {user.role === 'admin' ? 'مدير النظام' : 'مستلم مهام'}
+                    حسابي الشخصي
                   </p>
                 </div>
               </button>
@@ -332,21 +343,21 @@ export default function Header({ user }: HeaderProps) {
                     </button>
 
                     <Link
-                      href="/availability"
+                      href="/timer"
                       onClick={() => setIsUserMenuOpen(false)}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-theme-text hover:bg-theme-bg cursor-pointer transition-colors text-right"
                     >
                       <Clock className="w-3.5 h-3.5" />
-                      <span>جدول أوقات توفري</span>
+                      <span>عداد ساعات العمل</span>
                     </Link>
 
                     <Link
-                      href="/team"
+                      href="/youtube"
                       onClick={() => setIsUserMenuOpen(false)}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-theme-text hover:bg-theme-bg cursor-pointer transition-colors text-right"
                     >
-                      <Users className="w-3.5 h-3.5" />
-                      <span>فريق العمل</span>
+                      <Video className="w-3.5 h-3.5" />
+                      <span>ستوديو بارون</span>
                     </Link>
 
                     <Link
@@ -444,7 +455,7 @@ export default function Header({ user }: HeaderProps) {
       <nav className="md:hidden fixed bottom-5 left-4 right-4 bg-theme-panel/90 backdrop-blur-md border border-theme-border/60 flex items-center justify-around py-2 px-1 z-40 rounded-[2rem] shadow-[0_12px_40px_rgba(0,0,0,0.12)] transition-all duration-300">
         <Link 
           href="/" 
-          className={`flex flex-col items-center gap-1 text-[10px] py-2 px-3 rounded-2xl transition-all duration-300 relative ${
+          className={`flex flex-col items-center gap-1 text-[10px] py-2 px-2.5 rounded-2xl transition-all duration-300 relative ${
             isActive('/') 
               ? 'text-theme-accent font-bold bg-theme-accent/10 shadow-sm' 
               : 'text-theme-text-muted hover:text-theme-text'
@@ -462,7 +473,18 @@ export default function Header({ user }: HeaderProps) {
           }`}
         >
           <MessageSquare className="w-5 h-5 transition-transform duration-300 active:scale-95" />
-          <span>اللقاء</span>
+          <span>اليوميات</span>
+        </Link>
+        <Link 
+          href="/youtube" 
+          className={`flex flex-col items-center gap-1 text-[10px] py-2 px-2.5 rounded-2xl transition-all duration-300 relative ${
+            isActive('/youtube') 
+              ? 'text-theme-accent font-bold bg-theme-accent/10 shadow-sm' 
+              : 'text-theme-text-muted hover:text-theme-text'
+          }`}
+        >
+          <Video className="w-5 h-5 transition-transform duration-300 active:scale-95" />
+          <span>ستوديو</span>
         </Link>
         <Link 
           href="/ideas" 

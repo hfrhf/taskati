@@ -1,4 +1,4 @@
-import { getCurrentUserProfile, getProfiles, getMilestones } from './actions'
+import { getCurrentUserProfile, getProfiles, getMilestones, getYoutubeVideos } from './actions'
 import { redirect } from 'next/navigation'
 import DashboardClient from './dashboard-client'
 
@@ -13,12 +13,14 @@ export default async function DashboardPage() {
 
   const teamProfiles = await getProfiles()
   const milestones = await getMilestones()
+  const videos = await getYoutubeVideos()
 
   return (
     <DashboardClient 
       currentProfile={profile} 
       teamProfiles={teamProfiles} 
       initialMilestones={milestones}
+      youtubeVideos={videos}
     />
   )
 }

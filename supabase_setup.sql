@@ -106,6 +106,9 @@ create table if not exists public.tasks (
   due_date date not null,
   completed_date date,
   migrated_from_date date,
+  work_minutes integer not null default 0,
+  video_id uuid,
+  video_phase text check (video_phase in ('scripting', 'recording', 'editing', 'publishing', 'other')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -483,6 +486,45 @@ create policy "Allow all users to view idea comments" on public.idea_comments fo
 create policy "Allow users to insert their own comments" on public.idea_comments for insert with check (auth.uid() = user_id);
 create policy "Allow owners to update their own comments" on public.idea_comments for update using (auth.uid() = user_id);
 create policy "Allow owners/admins to delete comments" on public.idea_comments for delete using (auth.uid() = user_id or exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+-- 18. إنشاء جدول الفيديوهات لقناة اليوتيوب (youtube_videos)
+create table if not exists public.youtube_videos (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  description text,
+  thumbnail_url text,
+  status text not null default 'planning' check (status in ('planning', 'in_progress', 'completed', 'published')),
+  target_hours integer default 0,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  completed_at timestamp with time zone
+);
+
+alter table public.youtube_videos enable row level security;
+
+-- صلاحيات جدول الفيديوهات
+create policy "Allow users to manage their own videos" on public.youtube_videos
+  for all using (user_id = auth.uid());
+
+-- 19. ترقية الجداول القديمة وإضافة الأعمدة والروابط الهيكلية (Migrations)
+alter table public.tasks add column if not exists work_minutes integer not null default 0;
+alter table public.tasks add column if not exists video_id uuid;
+alter table public.tasks add column if not exists video_phase text check (video_phase in ('scripting', 'recording', 'editing', 'publishing', 'other'));
+
+-- إضافة قيد المفتاح الأجنبي (Foreign Key) للمهمة لربطها بالفيديو إذا لم يكن موجوداً
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints 
+    where constraint_name = 'tasks_video_id_fkey'
+  ) then
+    alter table public.tasks 
+    add constraint tasks_video_id_fkey 
+    foreign key (video_id) 
+    references public.youtube_videos(id) 
+    on delete set null;
+  end if;
+end $$;
 
 
 

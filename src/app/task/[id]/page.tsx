@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
-import { getCurrentUserProfile, getTaskFiles, getProfiles, getMilestones } from '../../actions'
+import { getCurrentUserProfile, getTaskFiles, getProfiles, getMilestones, getYoutubeVideos } from '../../actions'
 import { redirect } from 'next/navigation'
 import TaskDetailClient from './task-client'
 
@@ -19,14 +19,15 @@ export default async function TaskPage({ params }: TaskPageProps) {
 
   const supabase = await createClient()
 
-  // جلب تفاصيل المهمة مع بيانات المجموعة والمسؤول والمحطة الكبرى
+  // جلب تفاصيل المهمة مع بيانات المجموعة والمسؤول والمحطة الكبرى والفيديو المرتبط
   const { data: task, error } = await supabase
     .from('tasks')
     .select(`
       *,
       group:task_groups(name, color),
       assignee:profiles!tasks_assigned_to_fkey(name, email, avatar_url),
-      milestone:project_milestones(id, title)
+      milestone:project_milestones(id, title),
+      video:youtube_videos(id, title)
     `)
     .eq('id', id)
     .single()
@@ -46,6 +47,7 @@ export default async function TaskPage({ params }: TaskPageProps) {
   // جلب الملفات الشخصية للفريق والمحطات الكبرى لتعديل المهمة
   const teamProfiles = await getProfiles()
   const milestones = await getMilestones()
+  const youtubeVideos = await getYoutubeVideos()
 
   return (
     <TaskDetailClient 
@@ -54,6 +56,7 @@ export default async function TaskPage({ params }: TaskPageProps) {
       initialFiles={files} 
       teamProfiles={teamProfiles}
       milestones={milestones}
+      youtubeVideos={youtubeVideos}
     />
   )
 }

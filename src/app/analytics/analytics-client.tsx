@@ -10,11 +10,12 @@ import {
   CheckCircle2, 
   Star, 
   Loader2, 
-  User, 
-  Users, 
   Award,
   ChevronDown,
-  ChevronUp
+  BookOpen,
+  ArrowUpRight,
+  ArrowDownRight,
+  PieChart
 } from 'lucide-react'
 import { getMonthlyAnalytics } from '../actions'
 
@@ -26,29 +27,37 @@ interface Profile {
   avatar_url: string
 }
 
-interface UserStat {
-  userId: string
+interface GroupDist {
   name: string
-  email: string
-  avatarUrl: string
-  role: string
+  color: string
   totalMinutes: number
   totalHours: number
-  completedTasksCount: number
-  daysLogged: number
-  avgProductivity: number
-  tasks: string[]
 }
 
-interface TeamSummary {
-  totalHours: number
-  completedTasksCount: number
-  avgProductivity: number
+interface DailyBreakdownItem {
+  date: string
+  workMinutes: number
+  journalMinutes: number
+  tasksCount: number
+  productivityScore: number
+  mood: string
 }
 
 interface AnalyticsData {
-  userStats: UserStat[]
-  teamSummary: TeamSummary
+  personalSummary: {
+    totalJournalHours: number
+    totalTaskHours: number
+    completedTasksCount: number
+    daysLogged: number
+    avgProductivity: number
+    comparison: {
+      hoursDiff: number
+      tasksDiff: number
+      journalDiff: number
+    }
+  }
+  groupDistribution: GroupDist[]
+  dailyBreakdown: DailyBreakdownItem[]
 }
 
 interface AnalyticsClientProps {
@@ -75,6 +84,13 @@ const months = [
 
 const years = [2025, 2026, 2027]
 
+const moodMap: Record<string, string> = {
+  energetic: 'طاقة عالية 🚀',
+  stable: 'مستقر 😊',
+  tired: 'متعب 🥱',
+  stressed: 'مضغوط 🤯'
+}
+
 export default function AnalyticsClient({ currentProfile, initialData, initialMonth, initialYear }: AnalyticsClientProps) {
   const [data, setData] = useState<AnalyticsData>(initialData)
   const [month, setMonth] = useState<number>(initialMonth)
@@ -82,19 +98,8 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
   const [isPending, startTransition] = useTransition()
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null)
   
-  // التحكم في فتح وغلق قائمة مهام كل مستخدم
-  const [expandedUsers, setExpandedUsers] = useState<Record<string, boolean>>({})
-
   // حالات المخططات البيانية التفاعلية
-  const [chartMetric, setChartMetric] = useState<'hours' | 'tasks'>('hours')
   const [hoveredSlice, setHoveredSlice] = useState<number | null>(null)
-
-  const toggleUserExpand = (userId: string) => {
-    setExpandedUsers(prev => ({
-      ...prev,
-      [userId]: !prev[userId]
-    }))
-  }
 
   const showToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     setToast({ message, type })
@@ -113,50 +118,48 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
     })
   }
 
-  // إحصائيات المستخدم الحالي الخاصة
-  const myStats = data.userStats.find(s => s.userId === currentProfile.id)
-
-  // الألوان المقترحة للمخططات
-  const COLORS = [
-    '#6366f1', // Indigo
-    '#10b981', // Emerald
-    '#f59e0b', // Amber
-    '#f43f5e', // Rose
-    '#8b5cf6', // Violet
-    '#06b6d4', // Cyan
-    '#f97316', // Orange
-    '#d946ef', // Fuchsia
-    '#14b8a6', // Teal
-  ]
-
   // إعداد بيانات المخطط
-  const rawChartData = data.userStats.map((u, idx) => {
-    const val = chartMetric === 'hours' ? u.totalHours : u.completedTasksCount
-    return {
-      name: u.name,
-      value: val,
-      color: COLORS[idx % COLORS.length],
-      userId: u.userId,
-      avatarUrl: u.avatarUrl
-    }
-  })
+  const chartData = data.groupDistribution.filter(g => g.totalHours > 0)
+  const totalHoursSum = chartData.reduce((sum, item) => sum + item.totalHours, 0)
 
-  // تصفية القيم الأكبر من الصفر لعرض الدائرة
-  const chartData = rawChartData.filter(item => item.value > 0)
-  const totalSum = chartData.reduce((sum, item) => sum + item.value, 0)
+  const formatComparison = (val: number, unit: string) => {
+    if (val > 0) {
+      return (
+        <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-bold flex items-center gap-0.5 mt-1 border border-emerald-500/25">
+          <ArrowUpRight className="w-3 h-3" />
+          <span>+{val} {unit}</span>
+        </span>
+      )
+    } else if (val < 0) {
+      return (
+        <span className="text-[10px] bg-rose-500/10 text-rose-450 px-2 py-0.5 rounded-md font-bold flex items-center gap-0.5 mt-1 border border-rose-500/25">
+          <ArrowDownRight className="w-3 h-3" />
+          <span>{val} {unit}</span>
+        </span>
+      )
+    }
+    return (
+      <span className="text-[10px] bg-theme-bg text-theme-text-muted px-2 py-0.5 rounded-md font-bold flex items-center gap-0.5 mt-1 border border-theme-border/60">
+        <span>مستقر</span>
+      </span>
+    )
+  }
 
   return (
     <div className="flex-grow flex flex-col min-h-screen pb-24 md:pb-8">
       <Header user={currentProfile} />
 
-      <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <main className="flex-grow max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         <div className="space-y-6">
           
           {/* الترويسة والتحكم بالفلتر */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 border-b border-theme-border pb-5 text-right">
             <div>
-              <h1 className="text-2xl font-bold text-theme-text">التقارير والإحصائيات الشهرية</h1>
-              <p className="text-xs text-theme-text-muted mt-1">تتبع إجمالي ساعات العمل، المهام المكتملة، ومعدلات الأداء الذاتية للفريق والشركاء</p>
+              <h1 className="text-2xl font-black text-theme-text flex items-center gap-2 md:justify-start justify-center">
+                <span>📈</span>
+                <span>تحليل الأداء والإنتاجية الشخصية</span>
+              </h1>
+              <p className="text-xs text-theme-text-muted mt-1">تتبع إحصائياتك من ساعات العمل، المهام المكتملة، وتوزيع وقتك الشخصي على المشاريع</p>
             </div>
 
             <div className="flex items-center gap-3 justify-end">
@@ -189,450 +192,266 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
           </div>
 
           {/* لوحة مؤشرات الأداء الإجمالية */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             
-            {/* إجمالي ساعات العمل */}
-            <div className="bg-theme-panel rounded-2xl p-5 border border-theme-border shadow-sm flex items-center justify-between text-right relative overflow-hidden">
-              <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-indigo-500"></div>
-              <div className="space-y-1 pr-3">
-                <p className="text-xs text-theme-text-muted font-bold">إجمالي ساعات العمل للفريق</p>
-                <h3 className="text-2xl font-black text-theme-text flex items-baseline gap-1">
-                  <span>{data.teamSummary.totalHours}</span>
-                  <span className="text-xs text-theme-text-muted font-bold">ساعة</span>
-                </h3>
+            {/* ساعات العمل (المهام) */}
+            <div className="bg-theme-panel rounded-2xl p-4 border border-theme-border shadow-sm flex flex-col justify-between text-right relative overflow-hidden">
+              <div className="absolute top-0 right-0 bottom-0 w-1 bg-indigo-500"></div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] text-theme-text-muted font-bold">ساعات العمل (المهام)</p>
+                <Clock className="w-4 h-4 text-indigo-400" />
               </div>
-              <div className="w-12 h-12 bg-indigo-500/10 rounded-xl flex items-center justify-center shrink-0">
-                <Clock className="w-6 h-6 text-indigo-400" />
+              <div className="mt-3">
+                <h3 className="text-xl font-black text-theme-text font-mono">
+                  {data.personalSummary.totalTaskHours}س
+                </h3>
+                {formatComparison(data.personalSummary.comparison.hoursDiff, 'س')}
               </div>
             </div>
 
-            {/* إجمالي المهام المكتملة */}
-            <div className="bg-theme-panel rounded-2xl p-5 border border-theme-border shadow-sm flex items-center justify-between text-right relative overflow-hidden">
-              <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-emerald-500"></div>
-              <div className="space-y-1 pr-3">
-                <p className="text-xs text-theme-text-muted font-bold">المهام المنجزة بالكامل</p>
-                <h3 className="text-2xl font-black text-theme-text flex items-baseline gap-1">
-                  <span>{data.teamSummary.completedTasksCount}</span>
-                  <span className="text-xs text-theme-text-muted font-bold">مهمة</span>
-                </h3>
+            {/* المهام المنجزة */}
+            <div className="bg-theme-panel rounded-2xl p-4 border border-theme-border shadow-sm flex flex-col justify-between text-right relative overflow-hidden">
+              <div className="absolute top-0 right-0 bottom-0 w-1 bg-emerald-500"></div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] text-theme-text-muted font-bold">المهام المنجزة</p>
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center shrink-0">
-                <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <div className="mt-3">
+                <h3 className="text-xl font-black text-theme-text font-mono">
+                  {data.personalSummary.completedTasksCount}
+                </h3>
+                {formatComparison(data.personalSummary.comparison.tasksDiff, 'مهمة')}
+              </div>
+            </div>
+
+            {/* ساعات الجرنال */}
+            <div className="bg-theme-panel rounded-2xl p-4 border border-theme-border shadow-sm flex flex-col justify-between text-right relative overflow-hidden">
+              <div className="absolute top-0 right-0 bottom-0 w-1 bg-purple-500"></div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] text-theme-text-muted font-bold">ساعات الجرنال المسجلة</p>
+                <BookOpen className="w-4 h-4 text-purple-400" />
+              </div>
+              <div className="mt-3">
+                <h3 className="text-xl font-black text-theme-text font-mono">
+                  {data.personalSummary.totalJournalHours}س
+                </h3>
+                {formatComparison(data.personalSummary.comparison.journalDiff, 'س')}
               </div>
             </div>
 
             {/* متوسط تقييم الإنتاجية */}
-            <div className="bg-theme-panel rounded-2xl p-5 border border-theme-border shadow-sm flex items-center justify-between text-right relative overflow-hidden">
-              <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-amber-500"></div>
-              <div className="space-y-1 pr-3">
-                <p className="text-xs text-theme-text-muted font-bold">متوسط الإنتاجية اليومية للفريق</p>
-                <h3 className="text-2xl font-black text-theme-text flex items-baseline gap-1">
-                  <span>{data.teamSummary.avgProductivity}</span>
-                  <span className="text-xs text-theme-text-muted font-bold">/ 5</span>
-                </h3>
+            <div className="bg-theme-panel rounded-2xl p-4 border border-theme-border shadow-sm flex flex-col justify-between text-right relative overflow-hidden">
+              <div className="absolute top-0 right-0 bottom-0 w-1 bg-amber-500"></div>
+              <div className="flex justify-between items-start">
+                <p className="text-[10px] text-theme-text-muted font-bold">متوسط الإنتاجية اليومية</p>
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500/10" />
               </div>
-              <div className="w-12 h-12 bg-amber-500/10 rounded-xl flex items-center justify-center shrink-0">
-                <Star className="w-6 h-6 text-amber-500 fill-amber-500/20" />
+              <div className="mt-3">
+                <h3 className="text-xl font-black text-theme-text font-mono flex items-baseline gap-0.5">
+                  <span>{data.personalSummary.avgProductivity}</span>
+                  <span className="text-[10px] text-theme-text-muted font-bold">/ 5</span>
+                </h3>
+                <span className="text-[10px] text-theme-text-muted block mt-1 font-bold">أيام التدوين: {data.personalSummary.daysLogged} يوم</span>
               </div>
             </div>
 
           </div>
 
-          {/* قسم المخططات البيانية التفاعلية */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* قسم المخططات والتحليل اليومي */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
-            {/* المخطط الدائري (حصص الشركاء) */}
-            <div className="lg:col-span-6 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
-                      <Users className="w-4.5 h-4.5 text-theme-accent" />
-                      <span>توزيع المساهمات بين الشركاء</span>
-                    </h3>
-                    <p className="text-[10px] text-theme-text-muted mt-0.5">النسبة المئوية لحصة كل شريك من المجهود الكلي</p>
-                  </div>
-
-                  {/* مفتاح التبديل للمقياس النشط */}
-                  <div className="flex bg-theme-bg p-0.5 rounded-xl border border-theme-border shrink-0">
-                    <button
-                      onClick={() => {
-                        setChartMetric('hours')
-                        setHoveredSlice(null)
-                      }}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        chartMetric === 'hours'
-                          ? 'bg-theme-panel text-theme-text shadow-xs border border-theme-border/60'
-                          : 'text-theme-text-muted hover:text-theme-text'
-                      }`}
-                    >
-                      ساعات العمل
-                    </button>
-                    <button
-                      onClick={() => {
-                        setChartMetric('tasks')
-                        setHoveredSlice(null)
-                      }}
-                      className={`px-3 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                        chartMetric === 'tasks'
-                          ? 'bg-theme-panel text-theme-text shadow-xs border border-theme-border/60'
-                          : 'text-theme-text-muted hover:text-theme-text'
-                      }`}
-                    >
-                      المهام المكتملة
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-8">
-                  {/* الدائرة البيانية */}
-                  <div className="relative w-40 h-40 shrink-0">
-                    {totalSum > 0 ? (
-                      <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
-                        {/* الخلفية الداخلية المفرغة للـ Donut */}
-                        <circle cx="70" cy="70" r="50" fill="transparent" stroke="var(--theme-border)" strokeWidth="0.5" className="opacity-20" />
-                        
-                        {/* رسم الحصص */}
-                        {(() => {
-                          let cumulativePercent = 0
-                          return chartData.map((item, idx) => {
-                            const pct = item.value / totalSum
-                            const strokeDashoffset = 314.16 - (pct * 314.16)
-                            const rotation = (cumulativePercent * 360)
-                            cumulativePercent += pct
-
-                            const isHovered = hoveredSlice === idx
-
-                            return (
-                              <circle
-                                key={item.userId}
-                                cx="70"
-                                cy="70"
-                                r="50"
-                                fill="transparent"
-                                stroke={item.color}
-                                strokeWidth={isHovered ? 15 : 11}
-                                strokeDasharray="314.16"
-                                strokeDashoffset={strokeDashoffset}
-                                transform={`rotate(${rotation - 90} 70 70)`}
-                                style={{
-                                  transition: 'stroke-width 0.2s ease, stroke-dashoffset 0.5s ease',
-                                  cursor: 'pointer',
-                                }}
-                                onMouseEnter={() => setHoveredSlice(idx)}
-                                onMouseLeave={() => setHoveredSlice(null)}
-                              />
-                            )
-                          })
-                        })()}
-                        
-                        {/* تراكيب النصوص بالمنتصف */}
-                        <g transform="rotate(90 70 70)" className="text-center select-none pointer-events-none">
-                          {hoveredSlice !== null && chartData[hoveredSlice] ? (
-                            <>
-                              <text x="70" y="62" textAnchor="middle" className="fill-theme-text text-[9px] font-black">
-                                {chartData[hoveredSlice].name}
-                              </text>
-                              <text x="70" y="78" textAnchor="middle" className="fill-theme-text text-[11px] font-black">
-                                {chartData[hoveredSlice].value} {chartMetric === 'hours' ? 'س' : 'مهمة'}
-                              </text>
-                              <text x="70" y="90" textAnchor="middle" className="fill-theme-text-muted text-[7px] font-bold">
-                                {((chartData[hoveredSlice].value / totalSum) * 100).toFixed(0)}%
-                              </text>
-                            </>
-                          ) : (
-                            <>
-                              <text x="70" y="62" textAnchor="middle" className="fill-theme-text-muted text-[8px] font-bold">
-                                المجموع الكلي
-                              </text>
-                              <text x="70" y="78" textAnchor="middle" className="fill-theme-text text-[12px] font-black">
-                                {totalSum} {chartMetric === 'hours' ? 'س' : 'مهمة'}
-                              </text>
-                              <text x="70" y="90" textAnchor="middle" className="fill-theme-text-muted text-[7px] font-bold">
-                                {chartData.length} شركاء
-                              </text>
-                            </>
-                          )}
-                        </g>
-                      </svg>
-                    ) : (
-                      /* حالة عدم وجود بيانات */
-                      <div className="absolute inset-0 flex flex-col items-center justify-center border-4 border-dashed border-theme-border rounded-full text-[10px] text-theme-text-muted font-bold">
-                        لا توجد بيانات
-                      </div>
-                    )}
-                  </div>
-
-                  {/* وسيلة الإيضاح (Legend) */}
-                  <div className="flex-grow space-y-1.5 w-full max-h-[160px] overflow-y-auto pr-1">
-                    {rawChartData.map((item, idx) => {
-                      const pct = totalSum > 0 ? (item.value / totalSum) * 100 : 0
-                      const isHovered = hoveredSlice === idx
-                      const hasValue = item.value > 0
-
-                      return (
-                        <div
-                          key={item.userId}
-                          className={`flex items-center justify-between text-[10px] p-1.5 rounded-xl border transition-all duration-150 ${
-                            isHovered 
-                              ? 'bg-theme-bg border-theme-accent/30 scale-[1.01]' 
-                              : 'bg-transparent border-transparent'
-                          } ${!hasValue ? 'opacity-40' : ''}`}
-                          onMouseEnter={() => hasValue && setHoveredSlice(idx)}
-                          onMouseLeave={() => setHoveredSlice(null)}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
-                            <img src={item.avatarUrl} alt={item.name} className="w-4 h-4 rounded-md object-cover border border-theme-border shrink-0" />
-                            <span className="font-bold text-theme-text truncate">{item.name}</span>
-                          </div>
-                          <div className="text-left font-black text-theme-text flex items-center gap-1 font-mono shrink-0">
-                            <span>{item.value} {chartMetric === 'hours' ? 'س' : 'م'}</span>
-                            {hasValue && (
-                              <span className="text-[8px] font-medium text-theme-text-muted">({pct.toFixed(0)}%)</span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* مخطط المقارنة (تحليل وتوزيع الجهد) */}
-            <div className="lg:col-span-6 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right flex flex-col justify-between">
+            {/* الجزء الأيمن: مخطط توزيع الوقت الدائري */}
+            <div className="lg:col-span-5 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right flex flex-col">
               <div>
                 <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
-                  <TrendingUp className="w-4.5 h-4.5 text-theme-accent" />
-                  <span>مقارنة إنتاجية الشركاء</span>
+                  <PieChart className="w-4.5 h-4.5 text-theme-accent" />
+                  <span>توزيع الوقت على مجموعات المشاريع</span>
                 </h3>
-                <p className="text-[10px] text-theme-text-muted mt-0.5">تحليل مقارن لساعات العمل المسجلة مقابل عدد المهام المنجزة لكل شريك</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">تحليل الساعات المخصصة لكل مجموعة عمل هذا الشهر</p>
               </div>
 
-              <div className="space-y-4 mt-6 flex-grow">
-                {data.userStats.map((u) => {
-                  const maxHours = Math.max(...data.userStats.map(u => u.totalHours), 1)
-                  const maxTasks = Math.max(...data.userStats.map(u => u.completedTasksCount), 1)
-                  const hoursWidth = (u.totalHours / maxHours) * 100
-                  const tasksWidth = (u.completedTasksCount / maxTasks) * 100
+              <div className="mt-8 flex flex-col items-center justify-center gap-6">
+                {/* الدائرة البيانية */}
+                <div className="relative w-40 h-40 shrink-0">
+                  {totalHoursSum > 0 ? (
+                    <svg viewBox="0 0 140 140" className="w-full h-full transform -rotate-90">
+                      <circle cx="70" cy="70" r="50" fill="transparent" stroke="var(--theme-border)" strokeWidth="0.5" className="opacity-20" />
+                      
+                      {(() => {
+                        let cumulativePercent = 0
+                        return chartData.map((item, idx) => {
+                          const pct = item.totalHours / totalHoursSum
+                          const strokeDashoffset = 314.16 - (pct * 314.16)
+                          const rotation = (cumulativePercent * 360)
+                          cumulativePercent += pct
 
-                  return (
-                    <div key={u.userId} className="space-y-1.5">
-                      {/* معلومات الشريك */}
-                      <div className="flex items-center justify-between text-xs">
+                          const isHovered = hoveredSlice === idx
+
+                          return (
+                            <circle
+                              key={item.name}
+                              cx="70"
+                              cy="70"
+                              r="50"
+                              fill="transparent"
+                              stroke={item.color === 'pastel-purple' ? '#a855f7' : item.color === 'pastel-blue' ? '#0ea5e9' : item.color === 'pastel-green' ? '#10b981' : item.color === 'pastel-red' ? '#f43f5e' : item.color === 'pastel-amber' ? '#f59e0b' : 'var(--theme-accent)'}
+                              strokeWidth={isHovered ? 14 : 10}
+                              strokeDasharray="314.16"
+                              strokeDashoffset={strokeDashoffset}
+                              transform={`rotate(${rotation - 90} 70 70)`}
+                              style={{
+                                transition: 'stroke-width 0.2s ease, stroke-dashoffset 0.5s ease',
+                                cursor: 'pointer',
+                              }}
+                              onMouseEnter={() => setHoveredSlice(idx)}
+                              onMouseLeave={() => setHoveredSlice(null)}
+                            />
+                          )
+                        })
+                      })()}
+                      
+                      <g transform="rotate(90 70 70)" className="text-center select-none pointer-events-none">
+                        {hoveredSlice !== null && chartData[hoveredSlice] ? (
+                          <>
+                            <text x="70" y="64" textAnchor="middle" className="fill-theme-text text-[8px] font-black">
+                              {chartData[hoveredSlice].name}
+                            </text>
+                            <text x="70" y="78" textAnchor="middle" className="fill-theme-text text-[11px] font-black font-mono">
+                              {chartData[hoveredSlice].totalHours} س
+                            </text>
+                            <text x="70" y="90" textAnchor="middle" className="fill-theme-text-muted text-[7px] font-bold">
+                              {((chartData[hoveredSlice].totalHours / totalHoursSum) * 100).toFixed(0)}%
+                            </text>
+                          </>
+                        ) : (
+                          <>
+                            <text x="70" y="64" textAnchor="middle" className="fill-theme-text-muted text-[8px] font-bold">
+                              المجموع
+                            </text>
+                            <text x="70" y="78" textAnchor="middle" className="fill-theme-text text-[13px] font-black font-mono">
+                              {totalHoursSum}س
+                            </text>
+                            <text x="70" y="90" textAnchor="middle" className="fill-theme-text-muted text-[7px] font-bold">
+                              {chartData.length} مجموعة
+                            </text>
+                          </>
+                        )}
+                      </g>
+                    </svg>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center border-2 border-dashed border-theme-border rounded-full text-[10px] text-theme-text-muted font-bold text-center p-4 leading-normal">
+                      لا توجد ساعات عمل مسجلة
+                    </div>
+                  )}
+                </div>
+
+                {/* وسيلة الإيضاح */}
+                <div className="w-full space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                  {chartData.map((item, idx) => {
+                    const pct = totalHoursSum > 0 ? (item.totalHours / totalHoursSum) * 100 : 0
+                    const isHovered = hoveredSlice === idx
+
+                    return (
+                      <div
+                        key={item.name}
+                        className={`flex items-center justify-between text-[11px] p-2 rounded-xl border transition-all duration-150 ${
+                          isHovered 
+                            ? 'bg-theme-bg border-theme-accent/30 scale-[1.01]' 
+                            : 'bg-transparent border-transparent'
+                        }`}
+                        onMouseEnter={() => setHoveredSlice(idx)}
+                        onMouseLeave={() => setHoveredSlice(null)}
+                      >
                         <div className="flex items-center gap-2">
-                          <img
-                            src={u.avatarUrl}
-                            alt={u.name}
-                            className="w-5 h-5 rounded-md object-cover border border-theme-border"
-                          />
-                          <span className="font-bold text-theme-text">{u.name}</span>
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color === 'pastel-purple' ? '#a855f7' : item.color === 'pastel-blue' ? '#0ea5e9' : item.color === 'pastel-green' ? '#10b981' : item.color === 'pastel-red' ? '#f43f5e' : item.color === 'pastel-amber' ? '#f59e0b' : 'var(--theme-accent)' }}></span>
+                          <span className="font-bold text-theme-text">{item.name}</span>
                         </div>
-                        <div className="flex items-center gap-3 text-[10px] text-theme-text-muted font-bold font-mono">
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                            <span>{u.totalHours} س</span>
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>{u.completedTasksCount} مهمة</span>
-                          </span>
-                        </div>
+                        <span className="font-black text-theme-text font-mono text-xs">
+                          {item.totalHours}س <span className="text-[9px] font-normal text-theme-text-muted">({pct.toFixed(0)}%)</span>
+                        </span>
                       </div>
-
-                      {/* أشرطة المقارنة */}
-                      <div className="space-y-1 bg-theme-bg/30 p-1.5 rounded-xl border border-theme-border/40">
-                        {/* شريط الساعات */}
-                        <div className="h-1.5 w-full bg-theme-border/30 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-indigo-500 rounded-full transition-all duration-500 ease-out" 
-                            style={{ width: `${hoursWidth}%` }}
-                          />
-                        </div>
-                        {/* شريط المهام */}
-                        <div className="h-1.5 w-full bg-theme-border/30 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out" 
-                            style={{ width: `${tasksWidth}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
-            {/* الجزء الأيمن: إحصائياتي الشخصية */}
-            <div className="lg:col-span-4 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm space-y-6 text-right relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-l from-theme-accent to-theme-accent/40"></div>
-              
-              <div>
-                <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
-                  <Award className="w-4.5 h-4.5 text-theme-accent" />
-                  <span>إحصائياتك الشخصية هذا الشهر</span>
-                </h3>
-                <p className="text-[10px] text-theme-text-muted mt-0.5">ملخص لنشاطك وجهدك الشخصي المسجل خلال الشهر</p>
+            {/* الجزء الأيسر: النشاط اليومي التفصيلي */}
+            <div className="lg:col-span-7 space-y-4 text-right">
+              <div className="flex items-center gap-1.5 border-b border-theme-border pb-3">
+                <span className="w-2.5 h-2.5 rounded-full bg-theme-accent"></span>
+                <h2 className="text-sm font-black text-theme-text">سجل النشاط اليومي التفصيلي</h2>
               </div>
 
-              {myStats ? (
-                <div className="space-y-4">
-                  
-                  {/* ساعات عملك */}
-                  <div className="bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-4 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[10px] font-bold text-theme-text-muted">ساعات عملك المسجلة</span>
-                      <span className="text-lg font-black text-theme-text">{myStats.totalHours} ساعة</span>
-                    </div>
-                    <Clock className="w-5 h-5 text-indigo-400" />
-                  </div>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                {data.dailyBreakdown.length === 0 ? (
+                  <p className="text-xs text-theme-text-muted text-center py-10 bg-theme-panel rounded-2xl border border-dashed border-theme-border">
+                    لا توجد بيانات مسجلة لهذا الشهر.
+                  </p>
+                ) : (
+                  data.dailyBreakdown.map((item) => {
+                    const totalMins = item.workMinutes + item.journalMinutes
+                    const hasLogged = totalMins > 0 || item.tasksCount > 0 || item.productivityScore > 0
 
-                  {/* مهامك المكتملة */}
-                  <div className="bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-4 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[10px] font-bold text-theme-text-muted">مهامك المكتملة بنجاح</span>
-                      <span className="text-lg font-black text-theme-text">{myStats.completedTasksCount} مهمة</span>
-                    </div>
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                  </div>
-
-                  {/* متوسط إنتاجيتك */}
-                  <div className="bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-4 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[10px] font-bold text-theme-text-muted">متوسط إنتاجيتك الذاتية</span>
-                      <span className="text-lg font-black text-theme-text flex items-center gap-1">
-                        <span>{myStats.avgProductivity}</span>
-                        <span className="text-xs text-theme-text-muted font-normal">/ 5</span>
-                      </span>
-                    </div>
-                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                  </div>
-
-                  {/* عدد أيام المشاركة */}
-                  <div className="bg-theme-bg/40 border border-theme-border/60 rounded-2xl p-4 flex items-center justify-between">
-                    <div>
-                      <span className="block text-[10px] font-bold text-theme-text-muted">أيام الحضور والتقرير اليومي</span>
-                      <span className="text-lg font-black text-theme-text">{myStats.daysLogged} يوم</span>
-                    </div>
-                    <Calendar className="w-5 h-5 text-theme-accent" />
-                  </div>
-
-                </div>
-              ) : (
-                <p className="text-xs text-theme-text-muted text-center py-6">لم يتم العثور على سجلات نشاط لك في هذا الشهر.</p>
-              )}
-            </div>
-
-            {/* الجزء الأيسر: قائمة تقارير ومقارنة الفريق */}
-            <div className="lg:col-span-8 space-y-6 text-right">
-              
-              <div className="flex items-center justify-between border-b border-theme-border pb-3">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-theme-accent"></span>
-                  <h2 className="text-sm font-bold text-theme-text">لوحة إنجازات الشركاء والموظفين</h2>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {data.userStats.map((u) => {
-                  const isExpanded = !!expandedUsers[u.userId]
-                  const hasTasks = u.tasks.length > 0
-                  
-                  return (
-                    <div 
-                      key={u.userId}
-                      className="bg-theme-panel border border-theme-border rounded-2xl p-5 flex flex-col gap-4 shadow-sm hover:border-theme-border/80 transition-all duration-200"
-                    >
-                      {/* معلومات المستخدم العلوية */}
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={u.avatarUrl}
-                            alt={u.name}
-                            className="w-10 h-10 rounded-xl object-cover border border-theme-border shrink-0"
-                          />
-                          <div>
-                            <h4 className="text-xs font-black text-theme-text flex items-center gap-1.5 flex-wrap">
-                              <span>{u.name}</span>
-                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-md ${
-                                u.role === 'admin' 
-                                  ? 'bg-theme-accent/10 text-theme-accent' 
-                                  : 'bg-theme-bg text-theme-text-muted border border-theme-border/60'
-                              }`}>
-                                {u.role === 'admin' ? 'مدير' : 'شريك'}
-                              </span>
-                              <span 
-                                className="inline-flex items-center gap-1 text-[9px] font-bold text-violet-600 dark:text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-md border border-violet-500/20" 
-                                title="أيام الحضور والتقرير اليومي"
-                              >
-                                <Calendar className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400" />
-                                <span>{u.daysLogged}</span>
-                              </span>
-                            </h4>
-                            <p className="text-[10px] text-theme-text-muted">{u.email}</p>
-                          </div>
-                        </div>
-
-                        {/* إحصائيات سريعة للسطر */}
-                        <div className="flex flex-wrap items-center gap-4 text-center">
-                          <div className="bg-theme-bg px-3 py-1.5 rounded-xl border border-theme-border">
-                            <span className="block text-[8px] font-bold text-theme-text-muted">إجمالي الساعات</span>
-                            <span className="text-xs font-black text-theme-text">{u.totalHours} س</span>
-                          </div>
-                          
-                          <div className="bg-theme-bg px-3 py-1.5 rounded-xl border border-theme-border">
-                            <span className="block text-[8px] font-bold text-theme-text-muted">المهام المنجزة</span>
-                            <span className="text-xs font-black text-theme-text">{u.completedTasksCount}</span>
-                          </div>
-
-                          <div className="bg-theme-bg px-3 py-1.5 rounded-xl border border-theme-border flex flex-col items-center justify-center">
-                            <span className="block text-[8px] font-bold text-theme-text-muted">الإنتاجية</span>
-                            <span className="text-xs font-black text-theme-text flex items-center gap-0.5 justify-center">
-                              <span>{u.avgProductivity}</span>
-                              <Star className="w-3 h-3 text-amber-500 fill-amber-500 shrink-0" />
+                    return (
+                      <div 
+                        key={item.date}
+                        className={`bg-theme-panel border rounded-2xl p-4 flex items-center justify-between gap-4 shadow-xs transition-colors ${
+                          hasLogged ? 'border-theme-border hover:border-theme-border/80' : 'border-theme-border/40 opacity-55'
+                        }`}
+                      >
+                        {/* التاريخ والحالة المزاجية */}
+                        <div className="space-y-1">
+                          <span className="text-[11px] font-black text-theme-text font-mono">{item.date}</span>
+                          {item.mood && (
+                            <span className="block text-[9px] font-bold text-indigo-400 bg-indigo-500/5 px-2 py-0.5 rounded-md border border-indigo-500/10 w-fit">
+                              {moodMap[item.mood] || item.mood}
                             </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* زر استعراض قائمة المهام المكتملة لهذا المستخدم */}
-                      {hasTasks && (
-                        <div className="border-t border-theme-border/50 pt-3">
-                          <button
-                            onClick={() => toggleUserExpand(u.userId)}
-                            className="w-full flex items-center justify-between text-[10px] font-black text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
-                          >
-                            <span>استعراض المهام المكتملة ({u.completedTasksCount})</span>
-                            {isExpanded ? (
-                              <ChevronUp className="w-4 h-4 text-theme-text-muted" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-theme-text-muted" />
-                            )}
-                          </button>
-
-                          {isExpanded && (
-                            <div className="mt-3 bg-theme-bg/50 border border-theme-border/60 rounded-xl p-3 space-y-2 animate-modal-in">
-                              <ul className="list-disc pr-4 space-y-1.5">
-                                {u.tasks.map((taskTitle, idx) => (
-                                  <li key={idx} className="text-xs text-theme-text font-medium leading-relaxed">
-                                    {taskTitle}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
 
+                        {/* مؤشرات اليوم */}
+                        <div className="flex items-center gap-3 sm:gap-6">
+                          {/* الساعات المنجزة */}
+                          {totalMins > 0 ? (
+                            <div className="text-center">
+                              <span className="block text-[8px] font-bold text-theme-text-muted">الوقت الإجمالي</span>
+                              <span className="text-xs font-black text-theme-text font-mono">
+                                {Math.round((totalMins / 60) * 10) / 10}س
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {/* المهام المكتملة */}
+                          {item.tasksCount > 0 ? (
+                            <div className="text-center">
+                              <span className="block text-[8px] font-bold text-theme-text-muted">المهام المنجزة</span>
+                              <span className="text-xs font-black text-emerald-400 font-mono">
+                                {item.tasksCount} مهمة
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {/* الإنتاجية */}
+                          {item.productivityScore > 0 ? (
+                            <div className="flex flex-col items-center">
+                              <span className="block text-[8px] font-bold text-theme-text-muted">تقييم اليوم</span>
+                              <div className="flex items-center gap-0.5 text-amber-500">
+                                <span className="text-xs font-black font-mono">{item.productivityScore}</span>
+                                <Star className="w-3.5 h-3.5 fill-amber-500" />
+                              </div>
+                            </div>
+                          ) : (
+                            !hasLogged && (
+                              <span className="text-[10px] text-theme-text-muted font-bold">لا يوجد نشاط</span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
             </div>
 
           </div>
@@ -640,7 +459,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
         </div>
       </main>
 
-      {/* تنبيه التوست */}
+      {/* توست التنبيهات */}
       {toast && (
         <Toast 
           message={toast.message} 
