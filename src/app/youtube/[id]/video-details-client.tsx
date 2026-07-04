@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Header from '@/components/Header'
@@ -23,7 +23,17 @@ import {
   Square,
   Settings
 } from 'lucide-react'
-import { updateYoutubeVideo, deleteYoutubeVideo, updateYoutubeVideoSteps } from '../../actions'
+import { 
+  updateYoutubeVideo, 
+  deleteYoutubeVideo, 
+  updateYoutubeVideoSteps,
+  getAIReferenceScripts,
+  generateYoutubeScript,
+  generateStoryboardPrompts,
+  generateYoutubeSEO,
+  updateYoutubeVideoScript,
+  updateYoutubeVideoStoryboard
+} from '../../actions'
 
 interface Profile {
   id: string
@@ -46,6 +56,8 @@ interface Video {
   totalTasks: number
   completedTasks: number
   progress: number
+  script?: string
+  storyboard?: any[]
   steps?: Array<{
     id: string
     title: string
@@ -134,6 +146,132 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   // تعديل اسم خطوة
   const [editingStepId, setEditingStepId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+
+  // ================== حالات الذكاء الاصطناعي baron AI Studio ==================
+  const [profile] = useState<any>(currentProfile || { is_ai_enabled: false })
+  const [activeTab, setActiveTab] = useState<'checklist' | 'script' | 'storyboard' | 'seo'>('checklist')
+  const [topic, setTopic] = useState('')
+  const [lengthMinutes, setLengthMinutes] = useState(5)
+  const [tone, setTone] = useState('غموض وإثارة وتشويق 🎭')
+  const [pacing, setPacing] = useState('سريع وديناميكي ⚡')
+  const [scriptContent, setScriptContent] = useState(video.script || '')
+  
+  // السكربتات المرجعية للاستنساخ
+  const [referenceScripts, setReferenceScripts] = useState<any[]>([])
+  const [selectedRefIds, setSelectedRefIds] = useState<string[]>([])
+  
+  // لقطات السيناريو البصري (Storyboard)
+  const [storyboard, setStoryboard] = useState<any[]>(video.storyboard || [])
+  const [splitMethod, setSplitMethod] = useState<'story' | 'words' | 'sentences'>('story')
+  
+  // بيانات السيو والعناوين
+  const [seoData, setSeoData] = useState<any>(null)
+  
+  // حالات التحميل الفرعية
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false)
+  const [isGeneratingStoryboard, setIsGeneratingStoryboard] = useState(false)
+  const [isGeneratingSEO, setIsGeneratingSEO] = useState(false)
+
+  // جلب السكربتات المرجعية من المخزن
+  useEffect(() => {
+    if (profile.is_ai_enabled) {
+      const loadRefScripts = async () => {
+        try {
+          const data = await getAIReferenceScripts()
+          if (data && Array.isArray(data)) {
+            setReferenceScripts(data)
+          }
+        } catch (err) {
+          console.error("Error loading reference scripts:", err)
+        }
+      }
+      loadRefScripts()
+    }
+  }, [profile.is_ai_enabled])
+
+  const handleToggleRefScriptId = (refId: string) => {
+    setSelectedRefIds(prev => 
+      prev.includes(refId) ? prev.filter(id => id !== refId) : [...prev, refId]
+    )
+  }
+
+  const handleGenerateScript = async () => {
+    if (!topic.trim()) {
+      showToast('يرجى كتابة فكرة أو موضوع السيناريو أولاً.', 'warning')
+      return
+    }
+    setIsGeneratingScript(true)
+    try {
+      const generated = await generateYoutubeScript(
+        video.id,
+        topic.trim(),
+        lengthMinutes,
+        tone,
+        pacing,
+        selectedRefIds
+      )
+      setScriptContent(generated)
+      setVideo(prev => ({ ...prev, script: generated }))
+      showToast('تم صياغة وحفظ السكربت بنجاح بأسلوبك! 🪄', 'success')
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء توليد السكربت.', 'error')
+    } finally {
+      setIsGeneratingScript(false)
+    }
+  }
+
+  const handleSaveScriptManual = async () => {
+    try {
+      await updateYoutubeVideoScript(video.id, scriptContent)
+      setVideo(prev => ({ ...prev, script: scriptContent }))
+      showToast('تم حفظ السكربت يدوياً بنجاح! 💾', 'success')
+    } catch (err: any) {
+      showToast('حدث خطأ أثناء حفظ السكربت: ' + err.message, 'error')
+    }
+  }
+
+  const handleGenerateStoryboard = async () => {
+    setIsGeneratingStoryboard(true)
+    try {
+      const result = await generateStoryboardPrompts(video.id, splitMethod)
+      setStoryboard(result)
+      setVideo(prev => ({ ...prev, storyboard: result }))
+      showToast('تم تقسيم وتوليد مشاهد السيناريو البصري بنجاح! 🖼️', 'success')
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء تفكيك المشاهد.', 'error')
+    } finally {
+      setIsGeneratingStoryboard(false)
+    }
+  }
+
+  const handleToggleStoryboardStep = async (sceneId: string) => {
+    const updatedStoryboard = storyboard.map((scene: any) => {
+      if (scene.id === sceneId) {
+        return { ...scene, completed: !scene.completed }
+      }
+      return scene
+    })
+    setStoryboard(updatedStoryboard)
+    try {
+      await updateYoutubeVideoStoryboard(video.id, updatedStoryboard)
+      showToast('تم تحديث حالة المشهد بنجاح!', 'success')
+    } catch (err: any) {
+      showToast('فشل التحديث: ' + err.message, 'error')
+    }
+  }
+
+  const handleGenerateSEOData = async () => {
+    setIsGeneratingSEO(true)
+    try {
+      const data = await generateYoutubeSEO(video.id)
+      setSeoData(data)
+      showToast('تم توليد عناوين وبيانات السيو بنجاح! 🚀', 'success')
+    } catch (err: any) {
+      showToast(err.message || 'حدث خطأ أثناء توليد السيو.', 'error')
+    } finally {
+      setIsGeneratingSEO(false)
+    }
+  }
 
   const showToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     setToast({ message, type })
@@ -416,8 +554,56 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
 
           </div>
 
-          {/* ================== لوحة خطوات ومراحل الإنتاج المرنة والسريعة ================== */}
-          <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6">
+          {/* ================== التبويبات الذكية لاستوديو يوتيوب ================== */}
+          {profile.is_ai_enabled && (
+            <div className="flex border-b border-theme-border justify-start gap-4 pb-1 mb-6">
+              <button
+                onClick={() => setActiveTab('checklist')}
+                className={`pb-3.5 text-xs font-black transition-all border-b-2 cursor-pointer ${
+                  activeTab === 'checklist'
+                    ? 'border-theme-accent text-theme-accent'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text'
+                }`}
+              >
+                📋 خطوات الإنتاج والوقت
+              </button>
+              <button
+                onClick={() => setActiveTab('script')}
+                className={`pb-3.5 text-xs font-black transition-all border-b-2 cursor-pointer ${
+                  activeTab === 'script'
+                    ? 'border-theme-accent text-theme-accent'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text'
+                }`}
+              >
+                ✍️ مساعد السكربت الذكي
+              </button>
+              <button
+                onClick={() => setActiveTab('storyboard')}
+                className={`pb-3.5 text-xs font-black transition-all border-b-2 cursor-pointer ${
+                  activeTab === 'storyboard'
+                    ? 'border-theme-accent text-theme-accent'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text'
+                }`}
+              >
+                🖼️ السيناريو واللقطات (Storyboard)
+              </button>
+              <button
+                onClick={() => setActiveTab('seo')}
+                className={`pb-3.5 text-xs font-black transition-all border-b-2 cursor-pointer ${
+                  activeTab === 'seo'
+                    ? 'border-theme-accent text-theme-accent'
+                    : 'border-transparent text-theme-text-muted hover:text-theme-text'
+                }`}
+              >
+                🚀 العناوين والسيو
+              </button>
+            </div>
+          )}
+
+          {(activeTab === 'checklist' || !profile.is_ai_enabled) && (
+            <>
+              {/* ================== لوحة خطوات ومراحل الإنتاج المرنة والسريعة ================== */}
+              <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-theme-border/60 pb-4">
               <div>
                 <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
@@ -694,6 +880,404 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
               </div>
             )}
           </div>
+            </>
+          )}
+
+          {/* ================== تبويب مساعد السكربت الذكي ================== */}
+          {activeTab === 'script' && profile.is_ai_enabled && (
+            <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6 animate-modal-in">
+              <div>
+                <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
+                  <span>✍️</span>
+                  <span>مساعد السكربت الذكي (baron Script Cloner)</span>
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-1">توليد نص الفيديو بمحاكاة أسلوبك الشخصي بالكامل، وحفظ السكربتات المرجعية.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* الخيارات والإعدادات الجانبية */}
+                <div className="lg:col-span-5 space-y-5 bg-theme-bg/40 border border-theme-border p-5 rounded-2xl">
+                  <div>
+                    <h4 className="text-xs font-bold text-theme-text mb-3">⚙️ خيارات التوليد الفنية</h4>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-theme-text-muted mb-1.5">موضوع / فكرة الفيديو التفصيلية</label>
+                        <textarea
+                          value={topic}
+                          onChange={(e) => setTopic(e.target.value)}
+                          rows={3}
+                          placeholder="مثال: قصة نجاح وارن بافيت الخفية في الاستثمار والخدعة التي يخفيها عن العالم..."
+                          className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none leading-relaxed resize-none"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-theme-text-muted mb-1.5">المدة المتوقعة (دقائق)</label>
+                          <input
+                            type="number"
+                            value={lengthMinutes}
+                            onChange={(e) => setLengthMinutes(Math.max(1, parseInt(e.target.value) || 5))}
+                            min="1"
+                            max="40"
+                            className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none font-bold"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-theme-text-muted mb-1.5">نبرة السيناريو</label>
+                          <select
+                            value={tone}
+                            onChange={(e) => setTone(e.target.value)}
+                            className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none font-bold cursor-pointer"
+                          >
+                            <option value="غموض وإثارة وتشويق 🎭">🎭 غموض وتشويق</option>
+                            <option value="سينمائي وسرد قصصي 🎬">🎬 سينمائي وسرد</option>
+                            <option value="تحليلي وعميق 🧠">🧠 تحليلي وعميق</option>
+                            <option value="حماسي ومحفز ⚡">⚡ حماسي ومحفز</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-theme-text-muted mb-1.5">سرعة الإلقاء والتدفق</label>
+                        <select
+                          value={pacing}
+                          onChange={(e) => setPacing(e.target.value)}
+                          className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none font-bold cursor-pointer"
+                        >
+                          <option value="سريع وديناميكي ⚡">⚡ سريع وديناميكي</option>
+                          <option value="متزن وهادئ مع وقفات مشوقة ⏳">⏳ متزن وهادئ</option>
+                          <option value="درامي وبطيء للتأثير 🎭">🎭 درامي وبطيء</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* قائمة السكربتات المرجعية للاستنساخ */}
+                  <div className="border-t border-theme-border/60 pt-4">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-theme-text-muted">✍️ محاكاة أسلوبك الشخصي</span>
+                      <Link href="/youtube/settings" className="text-[8px] text-theme-accent hover:underline font-bold">إدارة المخزن</Link>
+                    </div>
+                    
+                    {referenceScripts.length === 0 ? (
+                      <p className="text-[9px] text-theme-text-muted leading-relaxed">
+                        مخزن السكربتات فارغ حالياً. أضف سكربتات سابقة في صفحة الإعدادات لاستنساخ أسلوبك!
+                      </p>
+                    ) : (
+                      <div className="max-h-36 overflow-y-auto space-y-2 pr-1 border border-theme-border/40 rounded-xl p-2 bg-theme-bg/20">
+                        {referenceScripts.map(ref => (
+                          <label key={ref.id} className="flex items-center gap-2 text-[10px] cursor-pointer hover:text-theme-text transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={selectedRefIds.includes(ref.id)}
+                              onChange={() => handleToggleRefScriptId(ref.id)}
+                              className="rounded text-theme-accent focus:ring-0 cursor-pointer"
+                            />
+                            <span className="truncate">{ref.title}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleGenerateScript}
+                    disabled={isGeneratingScript || isPending}
+                    className="w-full py-3 bg-theme-accent hover:opacity-90 disabled:opacity-50 text-theme-panel font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                  >
+                    {isGeneratingScript ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>جاري صياغة السكربت بأسلوبك...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>توليد السكربت بالذكاء الاصطناعي 🪄</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* مساحة العرض والمحرر */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="flex items-center justify-between border-b border-theme-border/60 pb-2">
+                    <span className="text-xs font-bold text-theme-text">السيناريو النهائي للفيديو</span>
+                    {scriptContent && (
+                      <div className="flex gap-4 text-[9px] font-mono text-theme-text-muted">
+                        <span>عدد الكلمات: {scriptContent.split(/\s+/).filter(Boolean).length} كلمة</span>
+                        <span>القراءة التقريبية: {Math.round(scriptContent.split(/\s+/).filter(Boolean).length / 130)} دقيقة</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <textarea
+                    value={scriptContent}
+                    onChange={(e) => setScriptContent(e.target.value)}
+                    rows={14}
+                    placeholder="اكتب السكربت هنا أو اضغط على زر التوليد في اليمين لصياغته..."
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-2xl px-4 py-3 text-xs leading-relaxed transition-all outline-none resize-none font-mono"
+                  />
+
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={handleSaveScriptManual}
+                      disabled={isPending}
+                      className="px-6 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>حفظ السكربت 💾</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ================== تبويب مقسم المشاهد والسيناريو البصري ================== */}
+          {activeTab === 'storyboard' && profile.is_ai_enabled && (
+            <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6 animate-modal-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-theme-border/60 pb-4">
+                <div>
+                  <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
+                    <span>🖼️</span>
+                    <span>تفكيك المشاهد ومولد برومبتات الصور (baron Storyboard)</span>
+                  </h3>
+                  <p className="text-[10px] text-theme-text-muted mt-1">تقسيم السكربت إلى لقطات متتالية وتوليد برومبت معقد بالإنجليزية لكل مشهد.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  <select
+                    value={splitMethod}
+                    onChange={(e: any) => setSplitMethod(e.target.value)}
+                    className="bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2.5 text-xs transition-all outline-none font-bold cursor-pointer"
+                  >
+                    <option value="story">تقسيم درامي ذكي 🧠</option>
+                    <option value="words">تقطيع سريع (كل 8-12 كلمة) ⚡</option>
+                    <option value="sentences">كل جملة كاملة 📝</option>
+                  </select>
+
+                  <button
+                    onClick={handleGenerateStoryboard}
+                    disabled={isGeneratingStoryboard || isPending}
+                    className="px-4 py-2.5 bg-theme-accent hover:opacity-90 disabled:opacity-50 text-theme-panel font-bold rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    {isGeneratingStoryboard ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>جاري توليد المشاهد...</span>
+                      </>
+                    ) : (
+                      <span>تفكيك وتوليد المشاهد 🖼️</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {storyboard.length === 0 ? (
+                <div className="text-center py-16 bg-theme-bg/30 border border-dashed border-theme-border rounded-2xl">
+                  <p className="text-xs text-theme-text-muted">لم يتم تفكيك أي مشاهد لهذا الفيديو بعد.</p>
+                  <p className="text-[10px] text-theme-text-muted mt-1">
+                    تأكد من وجود سكربت محفوظ للفيديو أولاً، ثم اضغط على زر "تفكيك وتوليد المشاهد" أعلاه.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {storyboard.map((scene: any, idx: number) => {
+                    return (
+                      <div
+                        key={scene.id || idx}
+                        className={`bg-theme-bg/60 border rounded-2xl p-4 flex flex-col md:flex-row justify-between gap-4 transition-all duration-200 border-theme-border hover:border-theme-border-hover ${
+                          scene.completed ? 'opacity-60 bg-theme-bg/20' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 flex-grow min-w-0">
+                          {/* زر التحديد للاكتمال */}
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStoryboardStep(scene.id)}
+                            className={`mt-0.5 p-1 rounded-lg border transition-all cursor-pointer ${
+                              scene.completed 
+                                ? 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20' 
+                                : 'bg-theme-bg text-theme-text-muted border-theme-border hover:border-theme-border-hover'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+
+                          <div className="space-y-2 flex-grow min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] font-black bg-neutral-600/30 text-theme-text px-2 py-0.5 rounded-md font-mono">
+                                مشهد #{idx + 1}
+                              </span>
+                              {scene.completed && (
+                                <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">مكتمل البناء</span>
+                              )}
+                            </div>
+                            
+                            {/* النص العربي المقابل */}
+                            <p className="text-xs text-theme-text leading-relaxed whitespace-pre-line font-bold">
+                              {scene.text}
+                            </p>
+
+                            {/* البرومبت الإنجليزي المقابل */}
+                            <div className="relative group/prompt bg-theme-input border border-theme-border/60 rounded-xl p-3 text-[10px] font-mono text-theme-text-muted leading-relaxed select-all">
+                              {scene.prompt}
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(scene.prompt)
+                                  showToast('تم نسخ البرومبت بنجاح! 📋', 'success')
+                                }}
+                                className="absolute left-2 top-2 bg-theme-bg/85 hover:bg-theme-panel border border-theme-border px-2 py-1 rounded-md text-[8px] font-bold text-theme-accent transition-colors opacity-0 group-hover/prompt:opacity-100 cursor-pointer"
+                              >
+                                نسخ البرومبت
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================== تبويب السيو والعناوين ================== */}
+          {activeTab === 'seo' && profile.is_ai_enabled && (
+            <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6 animate-modal-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-theme-border/60 pb-4">
+                <div>
+                  <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
+                    <span>🚀</span>
+                    <span>سيو وعناوين الفيديو الذكية (baron CTR/SEO)</span>
+                  </h3>
+                  <p className="text-[10px] text-theme-text-muted mt-1">توليد عناوين جذابة بنسبة نقر عالية، ووصف، وفصول متوافقة تماماً مع خوارزميات اليوتيوب.</p>
+                </div>
+
+                <button
+                  onClick={handleGenerateSEOData}
+                  disabled={isGeneratingSEO || isPending}
+                  className="px-4 py-2.5 bg-theme-accent hover:opacity-90 disabled:opacity-50 text-theme-panel font-bold rounded-xl text-xs transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  {isGeneratingSEO ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري صياغة السخاء...</span>
+                    </>
+                  ) : (
+                    <span>توليد بيانات السيو 🚀</span>
+                  )}
+                </button>
+              </div>
+
+              {!seoData ? (
+                <div className="text-center py-16 bg-theme-bg/30 border border-dashed border-theme-border rounded-2xl">
+                  <p className="text-xs text-theme-text-muted">لم يتم توليد بيانات السيو لهذا الفيديو بعد.</p>
+                  <p className="text-[10px] text-theme-text-muted mt-1">
+                    اضغط على زر التوليد أعلاه لتحليل السكربت وصياغة العناوين والوصف والفصول تلقائياً.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* العناوين المقترحة */}
+                  <div className="space-y-3 bg-theme-bg/40 border border-theme-border p-5 rounded-2xl">
+                    <h4 className="text-xs font-black text-theme-text">🎯 العناوين الخمسة المقترحة (أعلى نسبة نقر CTR)</h4>
+                    <div className="space-y-2">
+                      {seoData.titles?.map((title: string, idx: number) => (
+                        <div key={idx} className="flex items-center justify-between gap-3 p-3 bg-theme-input border border-theme-border/60 rounded-xl">
+                          <span className="text-xs font-bold text-theme-text">{title}</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(title)
+                              showToast('تم نسخ العنوان! 📋', 'success')
+                            }}
+                            className="px-2.5 py-1.5 bg-theme-bg hover:bg-theme-panel border border-theme-border text-[9px] font-bold text-theme-accent rounded-lg cursor-pointer transition-colors"
+                          >
+                            نسخ
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* الوصف المقترح */}
+                    <div className="space-y-2 bg-theme-bg/40 border border-theme-border p-5 rounded-2xl flex flex-col">
+                      <div className="flex items-center justify-between gap-2 border-b border-theme-border/40 pb-2 mb-2">
+                        <h4 className="text-xs font-black text-theme-text">📝 وصف الفيديو المقترح</h4>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(seoData.description || '')
+                            showToast('تم نسخ الوصف! 📋', 'success')
+                          }}
+                          className="text-[9px] font-bold text-theme-accent hover:underline cursor-pointer"
+                        >
+                          نسخ الوصف بالكامل
+                        </button>
+                      </div>
+                      <textarea
+                        readOnly
+                        value={seoData.description || ''}
+                        rows={8}
+                        className="w-full bg-theme-input border border-theme-border text-theme-text rounded-xl p-3 text-xs leading-relaxed outline-none resize-none leading-relaxed font-mono flex-grow"
+                      />
+                    </div>
+
+                    <div className="space-y-6">
+                      {/* الكلمات المفتاحية والوسوم */}
+                      <div className="space-y-2 bg-theme-bg/40 border border-theme-border p-5 rounded-2xl">
+                        <div className="flex items-center justify-between gap-2 border-b border-theme-border/40 pb-2 mb-2">
+                          <h4 className="text-xs font-black text-theme-text">🏷️ الكلمات المفتاحية والوسوم (Tags)</h4>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(seoData.tags?.join(', ') || '')
+                              showToast('تم نسخ الكلمات المفتاحية! 📋', 'success')
+                            }}
+                            className="text-[9px] font-bold text-theme-accent hover:underline cursor-pointer"
+                          >
+                            نسخ الكلمات المفتاحية
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                          {seoData.tags?.map((tag: string, idx: number) => (
+                            <span key={idx} className="bg-neutral-600/25 border border-theme-border text-theme-text px-2.5 py-1 rounded-lg text-[9px] font-bold font-mono">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* فصول ومخطط الفيديو */}
+                      <div className="space-y-2 bg-theme-bg/40 border border-theme-border p-5 rounded-2xl">
+                        <div className="flex items-center justify-between gap-2 border-b border-theme-border/40 pb-2 mb-2">
+                          <h4 className="text-xs font-black text-theme-text">⏳ فصول الفيديو (Timestamps/Chapters)</h4>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(seoData.chapters || '')
+                              showToast('تم نسخ الفصول! 📋', 'success')
+                            }}
+                            className="text-[9px] font-bold text-theme-accent hover:underline cursor-pointer"
+                          >
+                            نسخ الفصول
+                          </button>
+                        </div>
+                        <textarea
+                          readOnly
+                          value={seoData.chapters || ''}
+                          rows={4}
+                          className="w-full bg-theme-input border border-theme-border text-theme-text rounded-xl p-3 text-xs leading-relaxed outline-none resize-none font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </main>

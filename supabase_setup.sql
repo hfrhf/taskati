@@ -542,4 +542,33 @@ set steps = '[
   {"id": "9", "title": "تحسين السيو (العنوان والوصف)", "completed": false, "work_minutes": 0, "phase": "publishing"},
   {"id": "10", "title": "النشر والإطلاق على يوتيوب", "completed": false, "work_minutes": 0, "phase": "publishing"}
 ]'::jsonb
-where steps is null or steps = '[]'::jsonb;
+
+-- 21. إضافة حقول السكربت والسيناريو لجدول الفيديوهات
+alter table public.youtube_videos add column if not exists script text;
+alter table public.youtube_videos add column if not exists storyboard jsonb default '[]'::jsonb;
+
+-- 22. إضافة حقول التحكم بالذكاء الاصطناعي والمفاتيح في جدول ملفات التعريف
+alter table public.profiles add column if not exists is_ai_enabled boolean default false;
+alter table public.profiles add column if not exists azure_ai_key text;
+alter table public.profiles add column if not exists azure_ai_endpoint text;
+
+-- 23. إنشاء جدول النصوص المرجعية للأسلوب
+create table if not exists public.ai_reference_scripts (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  title text not null,
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.ai_reference_scripts enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies where tablename = 'ai_reference_scripts' and policyname = 'Users can manage their own reference scripts'
+  ) then
+    create policy "Users can manage their own reference scripts" on public.ai_reference_scripts
+      for all using (user_id = auth.uid());
+  end if;
+end $$;

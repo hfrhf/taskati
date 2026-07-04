@@ -2327,6 +2327,409 @@ export async function logTaskMinutes(taskId: string, minutes: number) {
   return data
 }
 
+// --------------------------------------------------------------------
+// 19. عمليات مساعد الذكاء الاصطناعي لاستوديو يوتيوب (Azure AI Studio Actions)
+// --------------------------------------------------------------------
+
+async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: string, userPrompt: string) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000) // تحديد مهلة قصوى 30 ثانية للوقاية
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        max_tokens: 3000,
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      const errText = await response.text()
+      throw new Error(`خطأ في بوابة الذكاء الاصطناعي (${response.status}): ${errText || response.statusText}`)
+    }
+
+    const result = await response.json()
+    const content = result.choices?.[0]?.message?.content
+    if (!content) throw new Error('لا تتوفر استجابة مقروءة من الذكاء الاصطناعي')
+    return content
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+    if (error.name === 'AbortError') {
+      throw new Error('انتهت مهلة استدعاء الذكاء الاصطناعي (30 ثانية). يرجى المحاولة مرة أخرى لضمان الأمان.')
+    }
+    throw error
+  }
+}
+
+export async function getAIReferenceScripts() {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('ai_reference_scripts')
+    .select('*')
+    .eq('user_id', profile.id)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data || []
+}
+
+export async function createAIReferenceScript(title: string, content: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!title.trim() || !content.trim()) throw new Error('العنوان والمحتوى مطلوبان')
+
+  const { data, error } = await supabase
+    .from('ai_reference_scripts')
+    .insert({
+      title: title.trim(),
+      content: content.trim(),
+      user_id: profile.id
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  return data
+}
+
+export async function updateAIReferenceScript(id: string, title: string, content: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!title.trim() || !content.trim()) throw new Error('العنوان والمحتوى مطلوبان')
+
+  const { data, error } = await supabase
+    .from('ai_reference_scripts')
+    .update({
+      title: title.trim(),
+      content: content.trim()
+    })
+    .eq('id', id)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  return data
+}
+
+export async function deleteAIReferenceScript(id: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { error } = await supabase
+    .from('ai_reference_scripts')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', profile.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  return { success: true }
+}
+
+export async function updateAISettings(isEnabled: boolean, apiKey: string | null, apiEndpoint: string | null) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({
+      is_ai_enabled: isEnabled,
+      azure_ai_key: apiKey?.trim() || null,
+      azure_ai_endpoint: apiEndpoint?.trim() || null
+    })
+    .eq('id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  revalidatePath('/')
+  return data
+}
+
+export async function saveVideoScriptAndStoryboard(videoId: string, script: string | null, storyboard: any[]) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .update({ script, storyboard })
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/youtube/${videoId}`)
+  return data
+}
+
+export async function generateYoutubeScript(
+  videoId: string,
+  topic: string,
+  lengthMinutes: number,
+  tone: string,
+  pacing: string,
+  selectedRefIds: string[]
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+
+  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+
+  if (!apiKey || !apiEndpoint) {
+    throw new Error('يرجى تعبئة مفتاح الـ API والـ Endpoint الخاصة بك في الإعدادات أولاً لتفعيل التوليد.')
+  }
+
+  let examplesText = ""
+  if (selectedRefIds && selectedRefIds.length > 0) {
+    const { data: refs } = await supabase
+      .from('ai_reference_scripts')
+      .select('title, content')
+      .in('id', selectedRefIds)
+
+    if (refs && refs.length > 0) {
+      examplesText = "إليك أمثلة سابقة من نصوص كتبتها لتقتدي بأسلوبها وبنيتها وصياغتها وتصيغ النص الجديد تماماً مثلها:\n" + 
+        refs.map((r: any, idx: number) => `--- مثال ${idx+1}: [${r.title}] ---\n${r.content}\n---`).join("\n\n")
+    }
+  }
+
+  const systemPrompt = `أنت كاتب سيناريوهات محترف لقناة يوتيوب غامضة ومثيرة اسمها "baron | بارون".
+أسلوب القناة متميز ومختلف تماماً: لغة سينمائية مشوقة ومفعمة بالغموض والإثارة والتشويق (Style: corporate thriller, Unreal Engine 5 aesthetic, surreal atmosphere).
+تتحدث عن مواضيع عميقة، وتستخدم استعارات فنية ورموزاً مثل "الدمى البيضاء عديمة الملامح ذات الرؤوس الملساء" (Faceless mannequin dummies).
+صوت الإلقاء يجب أن يكون مشوقاً، مفعماً بالغموض، مع توظيف وقفات ذكية لجذب الانتباه.
+
+${examplesText}
+
+المطلوب: كتابة سيناريو (سكربت) كامل باللغة العربية بناءً على الفكرة والموضوع المدخلين، مع الالتزام التام بالأسلوب الموضح في الأمثلة والتوجيهات أعلاه.
+المعايير المحددة للسكربت المولد:
+- النبرة الإبداعية: ${tone}
+- سرعة الإلقاء والتدفق: ${pacing}
+- الطول المتوقع للقراءة الإلقائية: ${lengthMinutes} دقائق (اكتب نصاً كافياً لتغطية هذه المدة بالكلمات، بمتوسط 130 كلمة لكل دقيقة).`
+
+  const userPrompt = `اكتب لي سكربت فيديو يوتيوب مشوق حول الموضوع التالي بالتفصيل مستوحى من البصمة الفنية الموضحة:
+"${topic}"`
+
+  const generatedText = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+
+  const { error: updateErr } = await supabase
+    .from('youtube_videos')
+    .update({ script: generatedText })
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+
+  if (updateErr) throw new Error(updateErr.message)
+
+  revalidatePath(`/youtube/${videoId}`)
+  return generatedText
+}
+
+export async function generateStoryboardPrompts(videoId: string, splitMethod: 'words' | 'sentences' | 'story') {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+
+  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+
+  if (!apiKey || !apiEndpoint) {
+    throw new Error('يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.')
+  }
+
+  const { data: video, error: fetchErr } = await supabase
+    .from('youtube_videos')
+    .select('script')
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .single()
+
+  if (fetchErr || !video || !video.script) {
+    throw new Error('يرجى توليد السكربت أو كتابته وحفظه أولاً قبل تفكيك المشاهد.')
+  }
+
+  const systemPrompt = `أنت مخرج ومصمم بصري لقناة يوتيوب "baron | بارون".
+مهمتك هي قراءة نص السكربت باللغة العربية، وتقسيمه إلى مشاهد متسلسلة، وتوليد وصف للقطة البصرية (Image Prompt) لكل مشهد باللغة الإنجليزية ليتم توليدها بالذكاء الاصطناعي.
+
+الستايل البصري الموحد الذي يجب أن تدمجه بالإنجليزية وتكتبه بالكامل في نهاية كل برومبت هو:
+"Stylized 3D render, metaphorical corporate thriller style. Faceless white mannequin dummies with smooth, featureless blank heads . with high-tech elements. Moody cinematic lighting, contrasting warm golden lamp light with cold deep blue twilight. Unreal Engine 5 aesthetic, crisp details, eerie and surreal corporate atmosphere."
+
+المعايير المحددة لتقطيع المشاهد:
+- طريقة التقسيم المطلوبة: ${
+    splitMethod === 'words' ? 'تقسيم قصير وسريع جداً (كل 8-12 كلمة مشهد للتنقل والمونتاج السريع).' :
+    splitMethod === 'sentences' ? 'تقسيم بعد كل جملة كاملة (جملة مفيدة).' :
+    'تقسيم درامي ذكي حسب سياق القصة وتدفق الأحداث.'
+  }
+
+المخرجات المطلوبة: يجب أن ترسل النتيجة بصيغة مصفوفة JSON صالحة ومباشرة دون أي نصوص إضافية (أو فواصل Markdown مثل \`\`\`json) تحتوي على كائنات بالبنية التالية:
+[
+  {
+    "id": "1",
+    "text": "النص العربي المقابل لهذا المشهد من السكربت",
+    "prompt": "The generated prompt in English (e.g. A faceless dummy mannequin doing X, Stylized 3D render...)",
+    "completed": false
+  }
+]`
+
+  const userPrompt = `حلل هذا السكربت وقسمه إلى مشاهد مبرمجاً برومبتات بالإنجليزية متطابقة مع الستايل الموحد:
+"${video.script}"`
+
+  const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+  
+  let cleanedJson = responseContent.trim()
+  if (cleanedJson.startsWith("```json")) {
+    cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
+  } else if (cleanedJson.startsWith("```")) {
+    cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
+  }
+
+  try {
+    const storyboardArray = JSON.parse(cleanedJson)
+    
+    const { error: updateErr } = await supabase
+      .from('youtube_videos')
+      .update({ storyboard: storyboardArray })
+      .eq('id', videoId)
+      .eq('user_id', profile.id)
+
+    if (updateErr) throw new Error(updateErr.message)
+
+    revalidatePath(`/youtube/${videoId}`)
+    return storyboardArray
+  } catch (err: any) {
+    throw new Error("فشل الذكاء الاصطناعي في صياغة مصفوفة المشاهد بشكل صحيح. يرجى المحاولة مجدداً. التفاصيل: " + err.message)
+  }
+}
+
+export async function generateYoutubeSEO(videoId: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+
+  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+
+  if (!apiKey || !apiEndpoint) {
+    throw new Error('يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.')
+  }
+
+  const { data: video, error: fetchErr } = await supabase
+    .from('youtube_videos')
+    .select('script')
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .single()
+
+  if (fetchErr || !video || !video.script) {
+    throw new Error('يرجى توليد السكربت وحفظه أولاً قبل توليد خيارات السيو والعناوين.')
+  }
+
+  const systemPrompt = `أنت خبير سيو (SEO) ويوتيوب محترف لقناة "baron | بارون".
+مهمتك هي قراءة نص السكربت، ثم اقتراح العناوين والوصف والوسوم وفصول الفيديو.
+يجب أن ترسل النتيجة بصيغة JSON صالحة ومباشرة دون أي نصوص إضافية، بالبنية التالية:
+{
+  "titles": ["عنوان 1 جذاب ونسبة نقر عالية", "عنوان 2...", "عنوان 3...", "عنوان 4...", "عنوان 5..."],
+  "description": "وصف الفيديو الطويل المتوافق مع خوارزميات اليوتيوب والسيو ويحتوي على كلمات دلالية قوية ورابط تواصل...",
+  "tags": ["وسم1", "وسم2", "وسم3", "وسم4"],
+  "chapters": "00:00 - المقدمة والغموض\\n01:30 - بداية الرحلة\\n..."
+}`
+
+  const userPrompt = `حلل هذا السكربت وولد بيانات السيو والعناوين المقترحة:
+"${video.script}"`
+
+  const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+  
+  let cleanedJson = responseContent.trim()
+  if (cleanedJson.startsWith("```json")) {
+    cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
+  } else if (cleanedJson.startsWith("```")) {
+    cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
+  }
+
+  try {
+    const seoData = JSON.parse(cleanedJson)
+    return seoData
+  } catch (err: any) {
+    throw new Error("فشل صياغة السيو بشكل صحيح. يرجى المحاولة مجدداً: " + err.message)
+  }
+}
+
+export async function updateYoutubeVideoScript(videoId: string, scriptContent: string) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .update({ script: scriptContent })
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  
+  revalidatePath(`/youtube/${videoId}`)
+  return data
+}
+
+export async function updateYoutubeVideoStoryboard(videoId: string, storyboard: any[]) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .update({ storyboard })
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+  
+  revalidatePath(`/youtube/${videoId}`)
+  return data
+}
+
+
 
 
 

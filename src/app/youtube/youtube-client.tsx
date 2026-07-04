@@ -15,7 +15,8 @@ import {
   BarChart2, 
   Eye, 
   BookOpen, 
-  Layers
+  Layers,
+  Settings
 } from 'lucide-react'
 import { createYoutubeVideo } from '../actions'
 
@@ -134,13 +135,23 @@ export default function YoutubeClient({ currentProfile, initialVideos = [], anal
               <p className="text-xs text-theme-text-muted mt-1">تتبع ساعات إنتاج كل فيديو ومقارنة الأداء لتقليل وقت الصنع وجودة أعلى</p>
             </div>
             
-            <button
-              onClick={() => setIsCreateModalOpen(true)}
-              className="px-5 py-3 bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer self-stretch md:self-auto"
-            >
-              <Plus className="w-4 h-4" />
-              <span>إضافة فيديو جديد</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto self-stretch md:self-auto">
+              <Link
+                href="/youtube/settings"
+                className="flex-1 md:flex-initial px-5 py-3 bg-theme-panel hover:bg-theme-bg border border-theme-border text-theme-text font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Settings className="w-4 h-4 text-theme-accent" />
+                <span>إعدادات أسلوب الـ AI 🤖</span>
+              </Link>
+              
+              <button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex-1 md:flex-initial px-5 py-3 bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>إضافة فيديو جديد</span>
+              </button>
+            </div>
           </div>
 
           {/* لوحة المؤشرات العلوية */}
