@@ -1970,28 +1970,22 @@ export async function getYoutubeVideos() {
   if (error) throw new Error(error.message)
   if (!videos || videos.length === 0) return []
 
-  // جلب إحصائيات المهام وساعات العمل لكل فيديو
-  const videosWithStats = await Promise.all(
-    videos.map(async (video) => {
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('id, status, work_minutes')
-        .eq('video_id', video.id)
+  // حساب ساعات العمل والمهام لكل فيديو بناءً على حقل الخطوات
+  const videosWithStats = videos.map((video) => {
+    const stepsList = video.steps || []
+    const totalTasks = stepsList.length
+    const completedTasks = stepsList.filter((s: any) => s.completed).length
+    const totalMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10
 
-      const totalTasks = tasks?.length || 0
-      const completedTasks = tasks?.filter(t => t.status === 'completed').length || 0
-      const totalMinutes = tasks?.reduce((sum, t) => sum + (t.work_minutes || 0), 0) || 0
-      const totalHours = Math.round((totalMinutes / 60) * 10) / 10
-
-      return {
-        ...video,
-        totalTasks,
-        completedTasks,
-        totalHours,
-        progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
-      }
-    })
-  )
+    return {
+      ...video,
+      totalTasks,
+      completedTasks,
+      totalHours,
+      progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+    }
+  })
 
   return videosWithStats
 }
@@ -2024,7 +2018,8 @@ export async function getYoutubeVideoDetails(videoId: string) {
 
   if (tasksError) throw new Error(tasksError.message)
 
-  // حساب توزيع الوقت على مراحل الإنتاج
+  // حساب توزيع الوقت على مراحل الإنتاج بناءً على الخطوات
+  const stepsList = video.steps || []
   const phases = {
     scripting: { name: 'السيناريو والكتابة ✍️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
     recording: { name: 'التصوير والتسجيل 🎙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
@@ -2033,13 +2028,12 @@ export async function getYoutubeVideoDetails(videoId: string) {
     other: { name: 'أعمال أخرى ⚙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 }
   }
 
-  const tasksList = tasks || [];
-  tasksList.forEach((t: any) => {
-    const phaseKey = (t.video_phase || 'other') as keyof typeof phases
+  stepsList.forEach((s: any) => {
+    const phaseKey = (s.phase || 'other') as keyof typeof phases
     if (phases[phaseKey]) {
-      phases[phaseKey].minutes += t.work_minutes || 0
+      phases[phaseKey].minutes += s.work_minutes || 0
       phases[phaseKey].tasksCount += 1
-      if (t.status === 'completed') {
+      if (s.completed) {
         phases[phaseKey].completedCount += 1
       }
     }
@@ -2051,21 +2045,21 @@ export async function getYoutubeVideoDetails(videoId: string) {
     phases[k].hours = Math.round((phases[k].minutes / 60) * 10) / 10
   })
 
-  const totalMinutes = tasksList.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+  const totalMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10
-  const completedTasks = tasksList.filter(t => t.status === 'completed').length
-  const progress = tasksList.length > 0 ? Math.round((completedTasks / tasksList.length) * 100) : 0
+  const completedTasks = stepsList.filter((s: any) => s.completed).length
+  const progress = stepsList.length > 0 ? Math.round((completedTasks / stepsList.length) * 100) : 0
 
   return {
     video: {
       ...video,
       totalHours,
-      totalTasks: tasksList.length,
+      totalTasks: stepsList.length,
       completedTasks,
       progress
     },
     phases,
-    tasks: tasksList
+    tasks: tasks || []
   }
 }
 
@@ -2081,6 +2075,20 @@ export async function createYoutubeVideo(
 
   if (!title.trim()) throw new Error('عنوان الفيديو مطلوب')
 
+  // الخطوات العشرة الافتراضية لقناة بارون
+  const defaultSteps = [
+    { id: "1", title: "البحث وفكرة الفيديو", completed: false, work_minutes: 0, phase: "scripting" },
+    { id: "2", title: "دراسة المنافسين والمحتوى", completed: false, work_minutes: 0, phase: "scripting" },
+    { id: "3", title: "كتابة السيناريو (السكربت)", completed: false, work_minutes: 0, phase: "scripting" },
+    { id: "4", title: "تسجيل التعليق الصوتي", completed: false, work_minutes: 0, phase: "recording" },
+    { id: "5", title: "توليد صور المشاهد (nano banana)", completed: false, work_minutes: 0, phase: "editing" },
+    { id: "6", title: "تحويل الصور لفيديوهات (vio/omni)", completed: false, work_minutes: 0, phase: "editing" },
+    { id: "7", title: "المونتاج والمؤثرات الصوتية والبصرية", completed: false, work_minutes: 0, phase: "editing" },
+    { id: "8", title: "تصميم الصورة المصغرة", completed: false, work_minutes: 0, phase: "publishing" },
+    { id: "9", title: "تحسين السيو (العنوان والوصف)", completed: false, work_minutes: 0, phase: "publishing" },
+    { id: "10", title: "النشر والإطلاق على يوتيوب", completed: false, work_minutes: 0, phase: "publishing" }
+  ]
+
   const { data, error } = await supabase
     .from('youtube_videos')
     .insert({
@@ -2089,7 +2097,8 @@ export async function createYoutubeVideo(
       thumbnail_url: thumbnailUrl.trim() || 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?q=80&w=300&auto=format&fit=crop',
       target_hours: targetHours,
       user_id: profile.id,
-      status: 'planning'
+      status: 'planning',
+      steps: defaultSteps
     })
     .select()
     .single()
@@ -2129,6 +2138,26 @@ export async function updateYoutubeVideo(
   const { data, error } = await supabase
     .from('youtube_videos')
     .update(updateData)
+    .eq('id', videoId)
+    .eq('user_id', profile.id)
+    .select()
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/youtube')
+  revalidatePath(`/youtube/${videoId}`)
+  return data
+}
+
+export async function updateYoutubeVideoSteps(videoId: string, steps: any[]) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile) throw new Error('غير مصرح بالدخول')
+
+  const { data, error } = await supabase
+    .from('youtube_videos')
+    .update({ steps })
     .eq('id', videoId)
     .eq('user_id', profile.id)
     .select()
@@ -2193,35 +2222,29 @@ export async function getYoutubeAnalytics() {
   let publishingMinutes = 0
   let completedVideosCount = 0
 
-  const videoStats = await Promise.all(
-    videos.map(async (video) => {
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('work_minutes, video_phase')
-        .eq('video_id', video.id)
+  const videoStats = videos.map((video) => {
+    const stepsList = video.steps || []
+    const minutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    totalMinutesSum += minutes
 
-      const minutes = tasks?.reduce((sum, t) => sum + (t.work_minutes || 0), 0) || 0
-      totalMinutesSum += minutes
+    if (video.status === 'published' || video.status === 'completed') {
+      completedVideosCount += 1
+    }
 
-      if (video.status === 'published' || video.status === 'completed') {
-        completedVideosCount += 1
-      }
-
-      tasks?.forEach((t) => {
-        const mins = t.work_minutes || 0
-        if (t.video_phase === 'scripting') scriptingMinutes += mins
-        else if (t.video_phase === 'recording') recordingMinutes += mins
-        else if (t.video_phase === 'editing') editingMinutes += mins
-        else if (t.video_phase === 'publishing') publishingMinutes += mins
-      })
-
-      return {
-        title: video.title,
-        hours: Math.round((minutes / 60) * 10) / 10,
-        status: video.status
-      }
+    stepsList.forEach((s: any) => {
+      const mins = s.work_minutes || 0
+      if (s.phase === 'scripting') scriptingMinutes += mins
+      else if (s.phase === 'recording') recordingMinutes += mins
+      else if (s.phase === 'editing') editingMinutes += mins
+      else if (s.phase === 'publishing') publishingMinutes += mins
     })
-  )
+
+    return {
+      title: video.title,
+      hours: Math.round((minutes / 60) * 10) / 10,
+      status: video.status
+    }
+  })
 
   const divisor = completedVideosCount || videos.length || 1
   const phaseAverages = {

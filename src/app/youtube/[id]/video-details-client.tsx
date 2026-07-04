@@ -16,9 +16,14 @@ import {
   ListTodo,
   ExternalLink,
   Layers,
-  FileText
+  FileText,
+  Plus,
+  Check,
+  Play,
+  Square,
+  Settings
 } from 'lucide-react'
-import { updateYoutubeVideo, deleteYoutubeVideo } from '../../actions'
+import { updateYoutubeVideo, deleteYoutubeVideo, updateYoutubeVideoSteps } from '../../actions'
 
 interface Profile {
   id: string
@@ -41,6 +46,13 @@ interface Video {
   totalTasks: number
   completedTasks: number
   progress: number
+  steps?: Array<{
+    id: string
+    title: string
+    completed: boolean
+    work_minutes: number
+    phase: string
+  }>
 }
 
 interface PhaseDetail {
@@ -108,9 +120,121 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   const [editTargetHours, setEditTargetHours] = useState(video.target_hours)
   const [editStatus, setEditStatus] = useState<Video['status']>(video.status)
 
+  // ================== حالات وإجراءات خطوات الإنتاج المرنة ==================
+  const [steps, setSteps] = useState<any[]>(video.steps || [])
+  const [isTimeModalOpen, setIsTimeModalOpen] = useState(false)
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(null)
+  const [logHours, setLogHours] = useState(0)
+  const [logMinutes, setLogMinutes] = useState(0)
+
+  // إضافة خطوة جديدة
+  const [newStepName, setNewStepName] = useState('')
+  const [newStepPhase, setNewStepPhase] = useState<'scripting' | 'recording' | 'editing' | 'publishing' | 'other'>('editing')
+
+  // تعديل اسم خطوة
+  const [editingStepId, setEditingStepId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+
   const showToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     setToast({ message, type })
   }
+
+  // دالة حفظ وتحديث الخطوات مع تحديث إحصائيات الفيديو محلياً
+  const saveSteps = (updatedSteps: any[]) => {
+    setSteps(updatedSteps)
+    
+    // إعادة حساب تفاصيل الفيديو
+    const totalTasks = updatedSteps.length
+    const completedTasks = updatedSteps.filter(s => s.completed).length
+    const totalMinutes = updatedSteps.reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10
+    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+    setVideo(prev => ({
+      ...prev,
+      totalHours,
+      totalTasks,
+      completedTasks,
+      progress,
+      steps: updatedSteps
+    }))
+
+    startTransition(async () => {
+      try {
+        await updateYoutubeVideoSteps(video.id, updatedSteps)
+      } catch (err: any) {
+        showToast('فشل حفظ الخطوات: ' + err.message, 'error')
+      }
+    })
+  }
+
+  const handleToggleStep = (stepId: string) => {
+    const updated = steps.map(s => s.id === stepId ? { ...s, completed: !s.completed } : s)
+    saveSteps(updated)
+  }
+
+  const openTimeModal = (stepId: string) => {
+    setSelectedStepId(stepId)
+    setLogHours(0)
+    setLogMinutes(0)
+    setIsTimeModalOpen(true)
+  }
+
+  const handleLogTimeSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedStepId) return
+
+    const addedMinutes = (logHours * 60) + logMinutes
+    const updated = steps.map(s => {
+      if (s.id === selectedStepId) {
+        const current = s.work_minutes || 0
+        return { ...s, work_minutes: Math.max(0, current + addedMinutes) }
+      }
+      return s
+    })
+
+    saveSteps(updated)
+    setIsTimeModalOpen(false)
+    setSelectedStepId(null)
+    showToast('تم تسجيل وقت العمل بنجاح ⏱️', 'success')
+  }
+
+  const handleDeleteStep = (stepId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذه الخطوة من الفيديو؟')) return
+    const updated = steps.filter(s => s.id !== stepId)
+    saveSteps(updated)
+  }
+
+  const handleAddStep = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newStepName.trim()) return
+
+    const newStep = {
+      id: Date.now().toString(),
+      title: newStepName.trim(),
+      completed: false,
+      work_minutes: 0,
+      phase: newStepPhase
+    }
+
+    saveSteps([...steps, newStep])
+    setNewStepName('')
+    showToast('تمت إضافة خطوة جديدة للفيديو ➕', 'success')
+  }
+
+  const startEditingStep = (stepId: string, currentTitle: string) => {
+    setEditingStepId(stepId)
+    setEditingTitle(currentTitle)
+  }
+
+  const handleRenameSubmit = (stepId: string) => {
+    if (!editingTitle.trim()) return
+    const updated = steps.map(s => s.id === stepId ? { ...s, title: editingTitle.trim() } : s)
+    saveSteps(updated)
+    setEditingStepId(null)
+  }
+
+  // =========================================================================
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -292,6 +416,177 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
 
           </div>
 
+          {/* ================== لوحة خطوات ومراحل الإنتاج المرنة والسريعة ================== */}
+          <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-theme-border/60 pb-4">
+              <div>
+                <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
+                  <ListTodo className="w-5 h-5 text-theme-accent" />
+                  <span>خطوات ومراحل إنتاج الفيديو ({steps.length})</span>
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-1">تتبع خطوات إنتاج الفيديو، وسجل أوقات العمل في كل مرحلة بمرونة كاملة.</p>
+              </div>
+
+              {/* إضافة خطوة سريعة */}
+              <form onSubmit={handleAddStep} className="flex items-center gap-2 w-full sm:w-auto">
+                <input 
+                  type="text"
+                  value={newStepName}
+                  onChange={(e) => setNewStepName(e.target.value)}
+                  placeholder="إضافة خطوة مخصصة..."
+                  required
+                  className="bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-xs transition-all outline-none flex-grow sm:flex-initial"
+                />
+                <select
+                  value={newStepPhase}
+                  onChange={(e: any) => setNewStepPhase(e.target.value)}
+                  className="bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-3 py-2 text-[10px] transition-all outline-none font-bold cursor-pointer"
+                >
+                  <option value="scripting">✍️ سيناريو</option>
+                  <option value="recording">🎙️ تسجيل</option>
+                  <option value="editing">🎬 مونتاج</option>
+                  <option value="publishing">🎨 نشر</option>
+                  <option value="other">⚙️ أخرى</option>
+                </select>
+                <button
+                  type="submit"
+                  className="p-2 bg-theme-accent hover:opacity-90 text-theme-panel rounded-xl transition-all flex items-center justify-center cursor-pointer shadow-sm active:scale-95 shrink-0"
+                  title="إضافة خطوة"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+
+            {steps.length === 0 ? (
+              <div className="text-center py-6 text-theme-text-muted text-xs">
+                لا توجد خطوات حالياً. استخدم النموذج أعلاه لإضافة خطوات العمل الخاصة بك.
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {steps.map((step) => {
+                  const phaseLabels: Record<string, { label: string, color: string }> = {
+                    scripting: { label: '✍️ سيناريو', color: 'bg-purple-500/15 text-purple-400 border-purple-500/20' },
+                    recording: { label: '🎙️ تسجيل', color: 'bg-sky-500/15 text-sky-400 border-sky-500/20' },
+                    editing: { label: '🎬 مونتاج', color: 'bg-rose-500/15 text-rose-400 border-rose-500/20' },
+                    publishing: { label: '🎨 غلاف ونشر', color: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
+                    other: { label: '⚙️ أخرى', color: 'bg-neutral-600/15 text-neutral-400 border-neutral-600/20' }
+                  }
+                  const badge = phaseLabels[step.phase || 'other'] || phaseLabels.other
+
+                  return (
+                    <div 
+                      key={step.id}
+                      className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border transition-all duration-200 ${
+                        step.completed 
+                          ? 'bg-theme-bg/30 border-theme-border/40 opacity-70' 
+                          : 'bg-theme-bg/60 border-theme-border hover:border-theme-border-hover'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 flex-grow min-w-0">
+                        {/* مربع الاختيار المخصص التفاعلي */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStep(step.id)}
+                          className={`w-5 h-5 rounded-lg border transition-all flex items-center justify-center cursor-pointer shrink-0 ${
+                            step.completed
+                              ? 'bg-emerald-500 border-emerald-500 text-white'
+                              : 'bg-theme-input border-theme-border hover:border-theme-accent'
+                          }`}
+                        >
+                          {step.completed && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </button>
+
+                        {/* عنوان الخطوة (إما عادي أو في وضع التعديل) */}
+                        {editingStepId === step.id ? (
+                          <div className="flex items-center gap-1.5 flex-grow">
+                            <input 
+                              type="text"
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              className="bg-theme-input border border-theme-accent text-theme-text rounded-lg px-2 py-1 text-xs outline-none w-full max-w-[280px]"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleRenameSubmit(step.id)
+                                if (e.key === 'Escape') setEditingStepId(null)
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRenameSubmit(step.id)}
+                              className="p-1 hover:bg-theme-bg text-emerald-500 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingStepId(null)}
+                              className="p-1 hover:bg-theme-bg text-rose-500 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span 
+                              className={`text-xs font-bold leading-relaxed truncate ${
+                                step.completed ? 'line-through text-theme-text-muted' : 'text-theme-text'
+                              }`}
+                            >
+                              {step.title}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => startEditingStep(step.id, step.title)}
+                              className="p-1 text-theme-text-muted hover:text-theme-accent rounded-lg opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 cursor-pointer"
+                              title="تعديل اسم الخطوة"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0 justify-end">
+                        {/* تسمية المرحلة */}
+                        <span className={`text-[9px] font-black px-2.5 py-0.5 rounded-md border ${badge.color}`}>
+                          {badge.label}
+                        </span>
+
+                        {/* وقت العمل المنجز في الخطوة */}
+                        <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-lg border border-theme-border bg-theme-input ${
+                          step.work_minutes > 0 ? 'text-indigo-400' : 'text-theme-text-muted'
+                        }`}>
+                          ⏱️ {Math.floor((step.work_minutes || 0) / 60)}س { (step.work_minutes || 0) % 60 }د
+                        </span>
+
+                        {/* إجراءات سريعة */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openTimeModal(step.id)}
+                            className="p-1.5 hover:bg-theme-bg text-theme-text-muted hover:text-indigo-400 rounded-lg transition-colors cursor-pointer border border-theme-border"
+                            title="تسجيل ساعات عمل"
+                          >
+                            <Clock className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteStep(step.id)}
+                            className="p-1.5 hover:bg-rose-950/20 text-theme-text-muted hover:text-rose-500 rounded-lg transition-colors cursor-pointer border border-theme-border"
+                            title="حذف الخطوة"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
           {/* توزيع الساعات والمجهود على المراحل الأربعة */}
           <div className="space-y-4">
             <h3 className="text-sm font-black text-theme-text text-right flex items-center gap-1.5">
@@ -402,6 +697,67 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
 
         </div>
       </main>
+
+      {/* ================== مودال تسجيل الساعات للخطوة ================== */}
+      {isTimeModalOpen && selectedStepId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => { setIsTimeModalOpen(false); setSelectedStepId(null); }}></div>
+          
+          <div className="relative bg-theme-panel w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-theme-border animate-modal-in z-10 text-right space-y-5">
+            <div className="flex items-start justify-between gap-4 border-b border-theme-border pb-4">
+              <div>
+                <h3 className="text-base font-black text-theme-text flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-400" />
+                  <span>تسجيل وقت العمل</span>
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">سجل الساعات والدقائق التي قضيتها في خطوة: <strong className="text-theme-text">{(steps.find(s => s.id === selectedStepId)?.title)}</strong></p>
+              </div>
+              <button 
+                onClick={() => { setIsTimeModalOpen(false); setSelectedStepId(null); }}
+                className="p-1 text-theme-text-muted hover:text-theme-text rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleLogTimeSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الساعات</label>
+                  <input 
+                    type="number" 
+                    value={logHours}
+                    onChange={(e) => setLogHours(Math.max(0, parseInt(e.target.value) || 0))}
+                    min="0"
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none font-bold" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الدقائق</label>
+                  <input 
+                    type="number" 
+                    value={logMinutes}
+                    onChange={(e) => setLogMinutes(Math.max(0, parseInt(e.target.value) || 0))}
+                    min="0"
+                    max="59"
+                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none font-bold" 
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-bold py-3.5 rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-98"
+                >
+                  <span>حفظ وتسجيل الوقت ⏱️</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ================== مودال تعديل الفيديو ================== */}
       {isEditModalOpen && (

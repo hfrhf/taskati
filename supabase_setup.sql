@@ -525,6 +525,21 @@ begin
     on delete set null;
   end if;
 end $$;
+-- 20. إضافة عمود steps لتخزين خطوات إنتاج فيديو يوتيوب المرنة
+alter table public.youtube_videos add column if not exists steps jsonb default '[]'::jsonb;
 
-
-
+-- تهيئة الفيديوهات الحالية بالخطوات العشرة الافتراضية
+update public.youtube_videos
+set steps = '[
+  {"id": "1", "title": "البحث وفكرة الفيديو", "completed": false, "work_minutes": 0, "phase": "scripting"},
+  {"id": "2", "title": "دراسة المنافسين والمحتوى", "completed": false, "work_minutes": 0, "phase": "scripting"},
+  {"id": "3", "title": "كتابة السيناريو (السكربت)", "completed": false, "work_minutes": 0, "phase": "scripting"},
+  {"id": "4", "title": "تسجيل التعليق الصوتي", "completed": false, "work_minutes": 0, "phase": "recording"},
+  {"id": "5", "title": "توليد صور المشاهد (nano banana)", "completed": false, "work_minutes": 0, "phase": "editing"},
+  {"id": "6", "title": "تحويل الصور لفيديوهات (vio/omni)", "completed": false, "work_minutes": 0, "phase": "editing"},
+  {"id": "7", "title": "المونتاج والمؤثرات الصوتية والبصرية", "completed": false, "work_minutes": 0, "phase": "editing"},
+  {"id": "8", "title": "تصميم الصورة المصغرة", "completed": false, "work_minutes": 0, "phase": "publishing"},
+  {"id": "9", "title": "تحسين السيو (العنوان والوصف)", "completed": false, "work_minutes": 0, "phase": "publishing"},
+  {"id": "10", "title": "النشر والإطلاق على يوتيوب", "completed": false, "work_minutes": 0, "phase": "publishing"}
+]'::jsonb
+where steps is null or steps = '[]'::jsonb;
