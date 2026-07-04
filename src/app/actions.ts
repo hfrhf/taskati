@@ -285,7 +285,7 @@ export async function addTask(
 }
 
 // تعديل حالة مهمة
-export async function updateTaskStatus(taskId: string, newStatus: string) {
+export async function updateTaskStatus(taskId: string, newStatus: string, workMinutes?: number) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
   if (!profile) throw new Error('غير مصرح بالدخول')
@@ -303,9 +303,13 @@ export async function updateTaskStatus(taskId: string, newStatus: string) {
   }
 
   const todayStr = new Date().toISOString().split('T')[0]
-  const updateData = {
+  const updateData: any = {
     status: newStatus,
     completed_date: newStatus === 'completed' ? todayStr : null
+  }
+
+  if (workMinutes !== undefined) {
+    updateData.work_minutes = workMinutes
   }
 
   const { data, error } = await supabase

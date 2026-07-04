@@ -97,6 +97,12 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isSavingDetails, setIsSavingDetails] = useState(false)
   
+  // نافذة تسجيل الوقت عند إنجاز المهمة
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false)
+  const [completionHours, setCompletionHours] = useState('0')
+  const [completionMinutes, setCompletionMinutes] = useState('0')
+  const [isSavingCompletion, setIsSavingCompletion] = useState(false)
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null)
 
   const showToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
@@ -106,6 +112,13 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
   // تحديث حالة المهمة
   const handleStatusChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newStatus = e.target.value
+    if (newStatus === 'completed') {
+      setCompletionHours('0')
+      setCompletionMinutes('0')
+      setIsCompletionModalOpen(true)
+      return
+    }
+
     try {
       setIsUpdatingStatus(true)
       const updated = await updateTaskStatus(task.id, newStatus)
@@ -115,6 +128,41 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
       showToast('فشل تحديث الحالة: ' + err.message, 'error')
     } finally {
       setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleConfirmCompletion = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const hours = parseInt(completionHours || '0', 10)
+    const minutes = parseInt(completionMinutes || '0', 10)
+    const additionalMinutes = hours * 60 + minutes
+    const currentMinutes = task.work_minutes || 0
+    const newTotalMinutes = currentMinutes + additionalMinutes
+
+    try {
+      setIsSavingCompletion(true)
+      const updated = await updateTaskStatus(task.id, 'completed', newTotalMinutes)
+      setTask({ ...task, status: updated.status, completed_date: updated.completed_date, work_minutes: newTotalMinutes })
+      showToast('أحسنت! تم تسجيل الوقت وتأكيد إنجاز المهمة بنجاح 🚀', 'success')
+      setIsCompletionModalOpen(false)
+    } catch (err: any) {
+      showToast('فشل إنجاز المهمة وتسجيل الوقت: ' + err.message, 'error')
+    } finally {
+      setIsSavingCompletion(false)
+    }
+  }
+
+  const handleCompleteWithoutAddingTime = async () => {
+    try {
+      setIsSavingCompletion(true)
+      const updated = await updateTaskStatus(task.id, 'completed', task.work_minutes || 0)
+      setTask({ ...task, status: updated.status, completed_date: updated.completed_date })
+      showToast('أحسنت! تم تأكيد إنجاز المهمة بنجاح 🚀', 'success')
+      setIsCompletionModalOpen(false)
+    } catch (err: any) {
+      showToast('فشل إنجاز المهمة: ' + err.message, 'error')
+    } finally {
+      setIsSavingCompletion(false)
     }
   }
 
@@ -574,6 +622,104 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                     <span>حفظ التعديلات</span>
                   )}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* هـ) نافذة تسجيل الوقت عند إنجاز المهمة */}
+      {isCompletionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => { if (!isSavingCompletion) setIsCompletionModalOpen(false) }}></div>
+          <div className="relative bg-theme-panel w-full max-w-md mx-4 rounded-3xl p-6 sm:p-8 shadow-2xl border border-theme-border animate-modal-in z-10 text-right">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-theme-text">تسجيل وقت إنجاز المهمة</h3>
+                <p className="text-xs text-theme-text-muted mt-1">لقد قمت بإنجاز المهمة: <strong className="text-theme-text">{task.title}</strong></p>
+              </div>
+              <button 
+                onClick={() => setIsCompletionModalOpen(false)}
+                disabled={isSavingCompletion}
+                className="p-1.5 text-theme-text-muted hover:text-theme-text hover:bg-theme-bg rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmCompletion} className="space-y-4">
+              {(task.work_minutes || 0) > 0 && (
+                <div className="bg-theme-bg/50 border border-theme-border rounded-xl p-3.5 text-xs text-theme-text-muted">
+                  ⏱️ الوقت المسجل سابقاً على هذه المهمة: <strong className="text-theme-text">{Math.floor((task.work_minutes || 0) / 60)}س {(task.work_minutes || 0) % 60}د</strong>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-theme-text-muted">كم عدد الساعات والدقائق الإضافية التي استغرقتها لإنجاز المهمة؟</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] text-theme-text-muted mb-1">عدد الساعات</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={completionHours}
+                      onChange={(e) => setCompletionHours(e.target.value)}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                      placeholder="ساعات"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-theme-text-muted mb-1">عدد الدقائق</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="59"
+                      value={completionMinutes}
+                      onChange={(e) => setCompletionMinutes(e.target.value)}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                      placeholder="دقائق"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-theme-text-muted mt-1 leading-relaxed">
+                  * سيتم إضافة هذا الوقت إلى إجمالي ساعات إنجاز المهمة.
+                </p>
+              </div>
+
+              <div className="pt-2 flex flex-col gap-2">
+                <button 
+                  type="submit" 
+                  disabled={isSavingCompletion}
+                  className="w-full bg-theme-accent hover:bg-theme-accent-hover disabled:bg-neutral-300 text-theme-panel font-bold py-3.5 rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSavingCompletion ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-theme-panel border-t-transparent rounded-full animate-spin"></span>
+                      <span>جاري الحفظ وتأكيد الإنجاز...</span>
+                    </>
+                  ) : (
+                    <span>حفظ الوقت وتأكيد الإنجاز ⏱️✓</span>
+                  )}
+                </button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    type="button"
+                    onClick={handleCompleteWithoutAddingTime}
+                    disabled={isSavingCompletion}
+                    className="w-full bg-theme-input hover:bg-theme-border disabled:opacity-50 text-theme-text font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer text-center"
+                  >
+                    إنجاز بدون إضافة وقت
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setIsCompletionModalOpen(false)}
+                    disabled={isSavingCompletion}
+                    className="w-full bg-theme-input hover:bg-theme-border disabled:opacity-50 text-theme-text font-bold py-2.5 rounded-xl text-xs transition-colors cursor-pointer text-center"
+                  >
+                    إلغاء
+                  </button>
+                </div>
               </div>
             </form>
           </div>
