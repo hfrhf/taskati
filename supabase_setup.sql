@@ -448,7 +448,7 @@ create table if not exists public.ideas (
   id uuid default gen_random_uuid() primary key,
   title text not null,
   description text,
-  category text not null default 'general', -- 'design', 'tech', 'marketing', 'general'
+  category text not null default 'general', -- 'design', 'tech', 'marketing', 'general', 'youtube'
   status text not null default 'draft' check (status in ('draft', 'discussing', 'approved', 'converted')),
   user_id uuid references public.profiles(id) on delete cascade not null,
   converted_task_id uuid references public.tasks(id) on delete set null,

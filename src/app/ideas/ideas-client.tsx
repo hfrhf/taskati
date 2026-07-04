@@ -95,14 +95,16 @@ const categories = [
   { id: 'general', label: '💡 عامة', color: 'border-gray-500/20 text-gray-500 bg-gray-500/5' },
   { id: 'design', label: '🎨 تصميم وواجهات', color: 'border-purple-500/20 text-purple-500 bg-purple-500/5' },
   { id: 'tech', label: '⚙️ برمجة وتقنية', color: 'border-sky-500/20 text-sky-500 bg-sky-500/5' },
-  { id: 'marketing', label: '📢 تسويق ونمو', color: 'border-amber-500/20 text-amber-500 bg-amber-500/5' }
+  { id: 'marketing', label: '📢 تسويق ونمو', color: 'border-amber-500/20 text-amber-500 bg-amber-500/5' },
+  { id: 'youtube', label: '🎬 يوتيوب وصناعة محتوى', color: 'border-rose-500/20 text-rose-500 bg-rose-500/5' }
 ]
 
 const categoryMap: Record<string, { label: string, color: string }> = {
   general: { label: '💡 عام', color: 'bg-gray-500/10 text-gray-500 border-gray-500/20' },
   design: { label: '🎨 تصميم', color: 'bg-purple-500/10 text-purple-500 border-purple-500/20' },
   tech: { label: '⚙️ تقني', color: 'bg-sky-500/10 text-sky-500 border-sky-500/20' },
-  marketing: { label: '📢 تسويق', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' }
+  marketing: { label: '📢 تسويق', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+  youtube: { label: '🎬 يوتيوب', color: 'bg-rose-500/10 text-rose-500 border-rose-500/20' }
 }
 
 const statusMap: Record<string, { label: string, color: string }> = {
@@ -579,6 +581,7 @@ export default function IdeasClient({
                       <option value="design">🎨 تصميم تجربة المستخدم والواجهات</option>
                       <option value="tech">⚙️ برمجة وبنية تحتية</option>
                       <option value="marketing">📢 تسويق ونمو وزيادة مستخدمين</option>
+                      <option value="youtube">🎬 يوتيوب وصناعة محتوى</option>
                     </select>
                   </div>
 
@@ -834,6 +837,7 @@ export default function IdeasClient({
                   <option value="design">🎨 تصميم تجربة المستخدم والواجهات</option>
                   <option value="tech">⚙️ برمجة وبنية تحتية</option>
                   <option value="marketing">📢 تسويق ونمو وزيادة مستخدمين</option>
+                  <option value="youtube">🎬 يوتيوب وصناعة محتوى</option>
                 </select>
               </div>
 

@@ -390,7 +390,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                   </p>
                 ) : (
                   data.dailyBreakdown.map((item) => {
-                    const totalMins = item.workMinutes + item.journalMinutes
+                    const totalMins = Math.max(item.workMinutes, item.journalMinutes)
                     const hasLogged = totalMins > 0 || item.tasksCount > 0 || item.productivityScore > 0
 
                     return (
