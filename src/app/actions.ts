@@ -1316,6 +1316,43 @@ export async function deleteScheduledMeeting(meetingId: string) {
   return { success: true }
 }
 
+// تعديل اجتماع مجدول (Admin Only)
+export async function updateScheduledMeeting(
+  meetingId: string,
+  title: string,
+  meetingType: 'online' | 'offline',
+  date: string,
+  time: string,
+  locationUrl: string,
+  notes: string
+) {
+  const supabase = await createClient()
+  const profile = await getCurrentUserProfile()
+  if (!profile || profile.role !== 'admin') throw new Error('صلاحيات غير كافية')
+
+  const { data: meeting, error } = await supabase
+    .from('scheduled_meetings')
+    .update({
+      title,
+      meeting_type: meetingType,
+      meeting_date: date,
+      meeting_time: time,
+      location_url: locationUrl || null,
+      notes: notes || null
+    })
+    .eq('id', meetingId)
+    .select(`
+      *,
+      creator:profiles!scheduled_meetings_created_by_fkey(name, email, avatar_url)
+    `)
+    .single()
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/availability')
+  return meeting
+}
+
 // 7. تفاعلات وتعليقات اللقاء اليومي (Daily Standup Reactions & Comments)
 
 // إضافة أو تعديل تفاعل إيموجي على تحديث يومي

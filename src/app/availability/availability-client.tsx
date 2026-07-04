@@ -7,7 +7,7 @@ import DatePicker from '@/components/DatePicker'
 import { 
   Clock, Info, ShieldCheck, Check, HelpCircle, XCircle, 
   Calendar, Users, MapPin, Video, Plus, Trash2, CheckSquare, 
-  Loader2, Sparkles, Send, Award, Link, CalendarDays, ExternalLink
+  Loader2, Sparkles, Send, Award, Link, CalendarDays, ExternalLink, Edit2
 } from 'lucide-react'
 import { 
   updateAvailabilitySlot, 
@@ -16,7 +16,8 @@ import {
   scheduleMeeting, 
   deleteScheduledMeeting,
   getActivePolls,
-  getScheduledMeetings
+  getScheduledMeetings,
+  updateScheduledMeeting
 } from '../actions'
 
 interface Profile {
@@ -151,10 +152,11 @@ export default function AvailabilityClient({
     { date: '', time: '' }
   ])
 
-  // نموذج جدولة اجتماع نهائي
+  // نموذج جدولة اجتماع نهائي أو تعديله
   const [scheduleModal, setScheduleModal] = useState<{
     isOpen: boolean
     pollId: string | null
+    meetingId: string | null
     title: string
     meetingType: 'online' | 'offline'
     date: string
@@ -164,6 +166,7 @@ export default function AvailabilityClient({
   }>({
     isOpen: false,
     pollId: null,
+    meetingId: null,
     title: '',
     meetingType: 'online',
     date: '',
@@ -392,6 +395,7 @@ export default function AvailabilityClient({
     setScheduleModal({
       isOpen: true,
       pollId: poll.id,
+      meetingId: null,
       title: `اجتماع: ${poll.title}`,
       meetingType: poll.meeting_type,
       date: option.proposed_date,
@@ -401,7 +405,22 @@ export default function AvailabilityClient({
     })
   }
 
-  // إرسال جدولة الاجتماع النهائي
+  // فتح نافذة تعديل الاجتماع المجدول
+  const openEditMeetingModal = (meeting: ScheduledMeeting) => {
+    setScheduleModal({
+      isOpen: true,
+      pollId: null,
+      meetingId: meeting.id,
+      title: meeting.title,
+      meetingType: meeting.meeting_type,
+      date: meeting.meeting_date,
+      time: meeting.meeting_time,
+      locationUrl: meeting.location_url || '',
+      notes: meeting.notes || ''
+    })
+  }
+
+  // إرسال جدولة الاجتماع النهائي أو تعديله
   const handleScheduleMeeting = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!scheduleModal.title.trim()) {
@@ -415,27 +434,44 @@ export default function AvailabilityClient({
 
     setLoading(true)
     try {
-      await scheduleMeeting(
-        scheduleModal.pollId,
-        scheduleModal.title,
-        scheduleModal.meetingType,
-        scheduleModal.date,
-        scheduleModal.time,
-        scheduleModal.locationUrl,
-        scheduleModal.notes
-      )
+      if (scheduleModal.meetingId) {
+        // تعديل الاجتماع المجدول حالياً
+        const updated = await updateScheduledMeeting(
+          scheduleModal.meetingId,
+          scheduleModal.title,
+          scheduleModal.meetingType,
+          scheduleModal.date,
+          scheduleModal.time,
+          scheduleModal.locationUrl,
+          scheduleModal.notes
+        )
 
-      // جلب البيانات المحدثة
-      const updatedMeetings = await getScheduledMeetings()
-      setScheduledMeetings(updatedMeetings)
+        setScheduledMeetings(prev => prev.map(m => m.id === scheduleModal.meetingId ? updated : m))
+        showToast('تم تعديل تفاصيل الاجتماع بنجاح! ✏️', 'success')
+      } else {
+        // جدولة اجتماع جديد
+        await scheduleMeeting(
+          scheduleModal.pollId,
+          scheduleModal.title,
+          scheduleModal.meetingType,
+          scheduleModal.date,
+          scheduleModal.time,
+          scheduleModal.locationUrl,
+          scheduleModal.notes
+        )
 
-      const updatedPolls = await getActivePolls()
-      setActivePolls(updatedPolls)
+        // جلب البيانات المحدثة
+        const updatedMeetings = await getScheduledMeetings()
+        setScheduledMeetings(updatedMeetings)
+
+        const updatedPolls = await getActivePolls()
+        setActivePolls(updatedPolls)
+        showToast('تمت جدولة الاجتماع النهائي وإرسال التنبيهات بنجاح! 📅', 'success')
+      }
 
       setScheduleModal(prev => ({ ...prev, isOpen: false }))
-      showToast('تمت جدولة الاجتماع النهائي وإرسال التنبيهات بنجاح! 📅', 'success')
     } catch (err: any) {
-      showToast(err.message || 'حدث خطأ أثناء جدولة الاجتماع', 'error')
+      showToast(err.message || 'حدث خطأ أثناء حفظ الاجتماع', 'error')
     } finally {
       setLoading(false)
     }
@@ -658,16 +694,25 @@ export default function AvailabilityClient({
                               {meeting.meeting_type === 'online' ? 'جوجل ميت (إجباري)' : 'لقاء كافيه (اختياري)'}
                             </span>
 
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               <span className="text-[10px] text-theme-text-muted">جدولها: {meeting.creator?.name || 'المنسق'}</span>
                               {isAdmin && (
-                                <button 
-                                  onClick={() => handleDeleteMeeting(meeting.id)}
-                                  className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
-                                  title="إلغاء الاجتماع"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <>
+                                  <button 
+                                    onClick={() => openEditMeetingModal(meeting)}
+                                    className="text-theme-text hover:text-theme-accent p-1 rounded hover:bg-theme-accent/10 transition-colors cursor-pointer"
+                                    title="تعديل الاجتماع"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteMeeting(meeting.id)}
+                                    className="text-rose-400 hover:text-rose-300 p-1 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                    title="إلغاء الاجتماع"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
                               )}
                             </div>
                           </div>
@@ -1127,7 +1172,7 @@ export default function AvailabilityClient({
               </button>
               <h3 className="text-base font-bold text-theme-text flex items-center gap-1.5">
                 <CalendarDays className="w-5 h-5 text-theme-accent" />
-                <span>اعتماد وجدولة الاجتماع النهائي</span>
+                <span>{scheduleModal.meetingId ? 'تعديل تفاصيل الاجتماع المجدول' : 'اعتماد وجدولة الاجتماع النهائي'}</span>
               </h3>
             </div>
 
@@ -1209,7 +1254,7 @@ export default function AvailabilityClient({
                   ) : (
                     <Check className="w-3.5 h-3.5" />
                   )}
-                  <span>اعتماد الموعد وجدولته</span>
+                  <span>{scheduleModal.meetingId ? 'حفظ التعديلات' : 'اعتماد الموعد وجدولته'}</span>
                 </button>
               </div>
             </form>
