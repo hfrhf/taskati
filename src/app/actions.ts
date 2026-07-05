@@ -2460,18 +2460,47 @@ async function callAzureAI(apiKey: string, endpoint: string, modelName: string, 
     
     let content = ''
     if (isResponsesApi) {
-      content = result.output_text || result.output?.[0]?.content?.[0]?.text
+      content = result.output_text
+      if (!content && Array.isArray(result.output)) {
+        for (const item of result.output) {
+          if (item.content && Array.isArray(item.content)) {
+            for (const block of item.content) {
+              if (block.text && typeof block.text === 'string') {
+                content = block.text
+                break
+              }
+            }
+          }
+          if (content) break
+        }
+      }
     } else {
       content = result.choices?.[0]?.message?.content
     }
 
-    // Fallback parsing if formatting differs
+    // Fallback parsing if formatting differs or fails
     if (!content) {
-      content = result.output_text || 
-                result.output?.[0]?.content?.[0]?.text || 
-                result.choices?.[0]?.message?.content ||
-                result.choices?.[0]?.text ||
-                (typeof result.output === 'string' ? result.output : '')
+      content = result.output_text
+      
+      if (!content && Array.isArray(result.output)) {
+        for (const item of result.output) {
+          if (item.content && Array.isArray(item.content)) {
+            for (const block of item.content) {
+              if (block.text && typeof block.text === 'string') {
+                content = block.text
+                break
+              }
+            }
+          }
+          if (content) break
+        }
+      }
+
+      if (!content) {
+        content = result.choices?.[0]?.message?.content || 
+                  result.choices?.[0]?.text ||
+                  (typeof result.output === 'string' ? result.output : '')
+      }
     }
 
     if (!content) {
