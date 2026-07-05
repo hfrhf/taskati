@@ -2637,31 +2637,32 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
 }
 
 export async function generateYoutubeSEO(videoId: string) {
-  const supabase = await createClient()
-  const profile = await getCurrentUserProfile()
-  if (!profile) throw new Error('غير مصرح بالدخول')
+  try {
+    const supabase = await createClient()
+    const profile = await getCurrentUserProfile()
+    if (!profile) return { success: false, error: 'غير مصرح بالدخول' }
 
-  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+    if (!profile.is_ai_enabled) return { success: false, error: 'يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً' }
 
-  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
-  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+    const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
 
-  if (!apiKey || !apiEndpoint) {
-    throw new Error('يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.')
-  }
+    if (!apiKey || !apiEndpoint) {
+      return { success: false, error: 'يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.' }
+    }
 
-  const { data: video, error: fetchErr } = await supabase
-    .from('youtube_videos')
-    .select('script')
-    .eq('id', videoId)
-    .eq('user_id', profile.id)
-    .single()
+    const { data: video, error: fetchErr } = await supabase
+      .from('youtube_videos')
+      .select('script')
+      .eq('id', videoId)
+      .eq('user_id', profile.id)
+      .single()
 
-  if (fetchErr || !video || !video.script) {
-    throw new Error('يرجى توليد السكربت وحفظه أولاً قبل توليد خيارات السيو والعناوين.')
-  }
+    if (fetchErr || !video || !video.script) {
+      return { success: false, error: 'يرجى توليد السكربت وحفظه أولاً قبل توليد خيارات السيو والعناوين.' }
+    }
 
-  const systemPrompt = `أنت خبير سيو (SEO) ويوتيوب محترف لقناة "baron | بارون".
+    const systemPrompt = `أنت خبير سيو (SEO) ويوتيوب محترف لقناة "baron | بارون".
 مهمتك هي قراءة نص السكربت، ثم اقتراح العناوين والوصف والوسوم وفصول الفيديو.
 يجب أن ترسل النتيجة بصيغة JSON صالحة ومباشرة دون أي نصوص إضافية، بالبنية التالية:
 {
@@ -2671,23 +2672,22 @@ export async function generateYoutubeSEO(videoId: string) {
   "chapters": "00:00 - المقدمة والغموض\\n01:30 - بداية الرحلة\\n..."
 }`
 
-  const userPrompt = `حلل هذا السكربت وولد بيانات السيو والعناوين المقترحة:
+    const userPrompt = `حلل هذا السكربت وولد بيانات السيو والعناوين المقترحة:
 "${video.script}"`
 
-  const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
-  
-  let cleanedJson = responseContent.trim()
-  if (cleanedJson.startsWith("```json")) {
-    cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
-  } else if (cleanedJson.startsWith("```")) {
-    cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
-  }
+    const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    
+    let cleanedJson = responseContent.trim()
+    if (cleanedJson.startsWith("```json")) {
+      cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
+    } else if (cleanedJson.startsWith("```")) {
+      cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
+    }
 
-  try {
     const seoData = JSON.parse(cleanedJson)
-    return seoData
+    return { success: true, data: seoData }
   } catch (err: any) {
-    throw new Error("فشل صياغة السيو بشكل صحيح. يرجى المحاولة مجدداً: " + err.message)
+    return { success: false, error: "فشل صياغة السيو بنجاح: " + err.message }
   }
 }
 

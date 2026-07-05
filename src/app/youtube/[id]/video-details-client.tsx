@@ -202,7 +202,7 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
     }
     setIsGeneratingScript(true)
     try {
-      const generated = await generateYoutubeScript(
+      const res = await generateYoutubeScript(
         video.id,
         topic.trim(),
         lengthMinutes,
@@ -210,9 +210,13 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
         pacing,
         selectedRefIds
       )
-      setScriptContent(generated)
-      setVideo(prev => ({ ...prev, script: generated }))
-      showToast('تم صياغة وحفظ السكربت بنجاح بأسلوبك! 🪄', 'success')
+      if (res && res.success && res.data) {
+        setScriptContent(res.data)
+        setVideo(prev => ({ ...prev, script: res.data }))
+        showToast('تم صياغة وحفظ السكربت بنجاح بأسلوبك! 🪄', 'success')
+      } else {
+        showToast(res?.error || 'حدث خطأ أثناء توليد السكربت.', 'error')
+      }
     } catch (err: any) {
       showToast(err.message || 'حدث خطأ أثناء توليد السكربت.', 'error')
     } finally {
@@ -233,10 +237,14 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   const handleGenerateStoryboard = async () => {
     setIsGeneratingStoryboard(true)
     try {
-      const result = await generateStoryboardPrompts(video.id, splitMethod)
-      setStoryboard(result)
-      setVideo(prev => ({ ...prev, storyboard: result }))
-      showToast('تم تقسيم وتوليد مشاهد السيناريو البصري بنجاح! 🖼️', 'success')
+      const res = await generateStoryboardPrompts(video.id, splitMethod)
+      if (res && res.success && res.data) {
+        setStoryboard(res.data)
+        setVideo(prev => ({ ...prev, storyboard: res.data }))
+        showToast('تم تقسيم وتوليد مشاهد السيناريو البصري بنجاح! 🖼️', 'success')
+      } else {
+        showToast(res?.error || 'حدث خطأ أثناء تفكيك المشاهد.', 'error')
+      }
     } catch (err: any) {
       showToast(err.message || 'حدث خطأ أثناء تفكيك المشاهد.', 'error')
     } finally {
@@ -263,9 +271,13 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   const handleGenerateSEOData = async () => {
     setIsGeneratingSEO(true)
     try {
-      const data = await generateYoutubeSEO(video.id)
-      setSeoData(data)
-      showToast('تم توليد عناوين وبيانات السيو بنجاح! 🚀', 'success')
+      const res = await generateYoutubeSEO(video.id)
+      if (res && res.success && res.data) {
+        setSeoData(res.data)
+        showToast('تم توليد عناوين وبيانات السيو بنجاح! 🚀', 'success')
+      } else {
+        showToast(res?.error || 'حدث خطأ أثناء توليد السيو.', 'error')
+      }
     } catch (err: any) {
       showToast(err.message || 'حدث خطأ أثناء توليد السيو.', 'error')
     } finally {
