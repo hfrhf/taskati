@@ -2708,6 +2708,36 @@ ${examplesText}
   }
 }
 
+function extractAndParseJSON(text: string) {
+  let cleaned = text.trim()
+  
+  if (cleaned.startsWith("```json")) {
+    cleaned = cleaned.replace(/^```json/, "").replace(/```$/, "").trim()
+  } else if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```/, "").replace(/```$/, "").trim()
+  }
+  
+  try {
+    return JSON.parse(cleaned)
+  } catch (e) {
+    const arrayMatch = cleaned.match(/\[[\s\S]*\]/)
+    if (arrayMatch) {
+      try {
+        return JSON.parse(arrayMatch[0])
+      } catch (err) {}
+    }
+    
+    const objectMatch = cleaned.match(/\{[\s\S]*\}/)
+    if (objectMatch) {
+      try {
+        return JSON.parse(objectMatch[0])
+      } catch (err) {}
+    }
+    
+    throw e
+  }
+}
+
 export async function generateStoryboardPrompts(videoId: string, splitMethod: 'words' | 'sentences' | 'story') {
   try {
     const supabase = await createClient()
@@ -2763,14 +2793,7 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
 
     const responseContent = await callAzureAI(apiKey, apiEndpoint, apiModel, systemPrompt, userPrompt)
     
-    let cleanedJson = responseContent.trim()
-    if (cleanedJson.startsWith("```json")) {
-      cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
-    } else if (cleanedJson.startsWith("```")) {
-      cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
-    }
-
-    const storyboardArray = JSON.parse(cleanedJson)
+    const storyboardArray = extractAndParseJSON(responseContent)
     
     const { error: updateErr } = await supabase
       .from('youtube_videos')
@@ -2828,14 +2851,7 @@ export async function generateYoutubeSEO(videoId: string) {
 
     const responseContent = await callAzureAI(apiKey, apiEndpoint, apiModel, systemPrompt, userPrompt)
     
-    let cleanedJson = responseContent.trim()
-    if (cleanedJson.startsWith("```json")) {
-      cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
-    } else if (cleanedJson.startsWith("```")) {
-      cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
-    }
-
-    const seoData = JSON.parse(cleanedJson)
+    const seoData = extractAndParseJSON(responseContent)
     return { success: true, data: seoData }
   } catch (err: any) {
     return { success: false, error: "فشل صياغة السيو بنجاح: " + err.message }
