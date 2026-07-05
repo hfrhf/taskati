@@ -2400,20 +2400,34 @@ async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: strin
   const timeoutId = setTimeout(() => controller.abort(), 30000) // تحديد مهلة قصوى 30 ثانية للوقاية
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': apiKey
-      },
-      body: JSON.stringify({
+    const isResponsesApi = endpoint.includes('/responses') || endpoint.includes('/v1/responses')
+    
+    let requestBody: any = {}
+    if (isResponsesApi) {
+      requestBody = {
+        instructions: systemPrompt,
+        input: userPrompt,
+        max_output_tokens: 3000,
+        temperature: 0.7
+      }
+    } else {
+      requestBody = {
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         max_tokens: 3000,
         temperature: 0.7
-      }),
+      }
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api-key': apiKey
+      },
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     })
 
@@ -2425,8 +2439,28 @@ async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: strin
     }
 
     const result = await response.json()
-    const content = result.choices?.[0]?.message?.content
-    if (!content) throw new Error('لا تتوفر استجابة مقروءة من الذكاء الاصطناعي')
+    
+    let content = ''
+    if (isResponsesApi) {
+      content = result.output_text || result.output?.[0]?.content?.[0]?.text
+    } else {
+      content = result.choices?.[0]?.message?.content
+    }
+
+    // Fallback parsing if formatting differs
+    if (!content) {
+      content = result.output_text || 
+                result.output?.[0]?.content?.[0]?.text || 
+                result.choices?.[0]?.message?.content ||
+                result.choices?.[0]?.text ||
+                (typeof result.output === 'string' ? result.output : '')
+    }
+
+    if (!content) {
+      console.error('فشل في قراءة الاستجابة. بنية الـ JSON المستلمة هي:', JSON.stringify(result))
+      throw new Error('لا تتوفر استجابة مقروءة من الذكاء الاصطناعي')
+    }
+
     return content
   } catch (error: any) {
     clearTimeout(timeoutId)
