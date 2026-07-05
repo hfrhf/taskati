@@ -2425,7 +2425,7 @@ async function callAzureAI(apiKey: string, endpoint: string, modelName: string, 
         model: modelName || 'gpt-4o',
         instructions: systemPrompt,
         input: userPrompt,
-        max_output_tokens: 3000
+        max_output_tokens: 8000
       }
     } else {
       requestBody = {
@@ -2434,7 +2434,7 @@ async function callAzureAI(apiKey: string, endpoint: string, modelName: string, 
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 3000,
+        max_tokens: 4000,
         temperature: 0.7
       }
     }
