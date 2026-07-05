@@ -2566,33 +2566,34 @@ export async function generateYoutubeScript(
   pacing: string,
   selectedRefIds: string[]
 ) {
-  const supabase = await createClient()
-  const profile = await getCurrentUserProfile()
-  if (!profile) throw new Error('غير مصرح بالدخول')
+  try {
+    const supabase = await createClient()
+    const profile = await getCurrentUserProfile()
+    if (!profile) return { success: false, error: 'غير مصرح بالدخول' }
 
-  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+    if (!profile.is_ai_enabled) return { success: false, error: 'يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً' }
 
-  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
-  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+    const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
 
-  if (!apiKey || !apiEndpoint) {
-    throw new Error('يرجى تعبئة مفتاح الـ API والـ Endpoint الخاصة بك في الإعدادات أولاً لتفعيل التوليد.')
-  }
-
-  let examplesText = ""
-  if (selectedRefIds && selectedRefIds.length > 0) {
-    const { data: refs } = await supabase
-      .from('ai_reference_scripts')
-      .select('title, content')
-      .in('id', selectedRefIds)
-
-    if (refs && refs.length > 0) {
-      examplesText = "إليك أمثلة سابقة من نصوص كتبتها لتقتدي بأسلوبها وبنيتها وصياغتها وتصيغ النص الجديد تماماً مثلها:\n" + 
-        refs.map((r: any, idx: number) => `--- مثال ${idx+1}: [${r.title}] ---\n${r.content}\n---`).join("\n\n")
+    if (!apiKey || !apiEndpoint) {
+      return { success: false, error: 'يرجى تعبئة مفتاح الـ API والـ Endpoint الخاصة بك في الإعدادات أولاً لتفعيل التوليد.' }
     }
-  }
 
-  const systemPrompt = `أنت كاتب سيناريوهات محترف لقناة يوتيوب غامضة ومثيرة اسمها "baron | بارون".
+    let examplesText = ""
+    if (selectedRefIds && selectedRefIds.length > 0) {
+      const { data: refs } = await supabase
+        .from('ai_reference_scripts')
+        .select('title, content')
+        .in('id', selectedRefIds)
+
+      if (refs && refs.length > 0) {
+        examplesText = "إليك أمثلة سابقة من نصوص كتبتها لتقتدي بأسلوبها وبنيتها وصياغتها وتصيغ النص الجديد تماماً مثلها:\n" + 
+          refs.map((r: any, idx: number) => `--- مثال ${idx+1}: [${r.title}] ---\n${r.content}\n---`).join("\n\n")
+      }
+    }
+
+    const systemPrompt = `أنت كاتب سيناريوهات محترف لقناة يوتيوب غامضة ومثيرة اسمها "baron | بارون".
 أسلوب القناة متميز ومختلف تماماً: لغة سينمائية مشوقة ومفعمة بالغموض والإثارة والتشويق (Style: corporate thriller, Unreal Engine 5 aesthetic, surreal atmosphere).
 تتحدث عن مواضيع عميقة، وتستخدم استعارات فنية ورموزاً مثل "الدمى البيضاء عديمة الملامح ذات الرؤوس الملساء" (Faceless mannequin dummies).
 صوت الإلقاء يجب أن يكون مشوقاً، مفعماً بالغموض، مع توظيف وقفات ذكية لجذب الانتباه.
@@ -2605,49 +2606,52 @@ ${examplesText}
 - سرعة الإلقاء والتدفق: ${pacing}
 - الطول المتوقع للقراءة الإلقائية: ${lengthMinutes} دقائق (اكتب نصاً كافياً لتغطية هذه المدة بالكلمات، بمتوسط 130 كلمة لكل دقيقة).`
 
-  const userPrompt = `اكتب لي سكربت فيديو يوتيوب مشوق حول الموضوع التالي بالتفصيل مستوحى من البصمة الفنية الموضحة:
+    const userPrompt = `اكتب لي سكربت فيديو يوتيوب مشوق حول الموضوع التالي بالتفصيل مستوحى من البصمة الفنية الموضحة:
 "${topic}"`
 
-  const generatedText = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    const generatedText = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
 
-  const { error: updateErr } = await supabase
-    .from('youtube_videos')
-    .update({ script: generatedText })
-    .eq('id', videoId)
-    .eq('user_id', profile.id)
+    const { error: updateErr } = await supabase
+      .from('youtube_videos')
+      .update({ script: generatedText })
+      .eq('id', videoId)
+      .eq('user_id', profile.id)
 
-  if (updateErr) throw new Error(updateErr.message)
+    if (updateErr) return { success: false, error: updateErr.message }
 
-  revalidatePath(`/youtube/${videoId}`)
-  return generatedText
+    return { success: true, data: generatedText }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'حدث خطأ غير متوقع أثناء التوليد' }
+  }
 }
 
 export async function generateStoryboardPrompts(videoId: string, splitMethod: 'words' | 'sentences' | 'story') {
-  const supabase = await createClient()
-  const profile = await getCurrentUserProfile()
-  if (!profile) throw new Error('غير مصرح بالدخول')
+  try {
+    const supabase = await createClient()
+    const profile = await getCurrentUserProfile()
+    if (!profile) return { success: false, error: 'غير مصرح بالدخول' }
 
-  if (!profile.is_ai_enabled) throw new Error('يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً')
+    if (!profile.is_ai_enabled) return { success: false, error: 'يرجى تفعيل الذكاء الاصطناعي في الإعدادات أولاً' }
 
-  const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
-  const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
+    const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
 
-  if (!apiKey || !apiEndpoint) {
-    throw new Error('يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.')
-  }
+    if (!apiKey || !apiEndpoint) {
+      return { success: false, error: 'يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.' }
+    }
 
-  const { data: video, error: fetchErr } = await supabase
-    .from('youtube_videos')
-    .select('script')
-    .eq('id', videoId)
-    .eq('user_id', profile.id)
-    .single()
+    const { data: video, error: fetchErr } = await supabase
+      .from('youtube_videos')
+      .select('script')
+      .eq('id', videoId)
+      .eq('user_id', profile.id)
+      .single()
 
-  if (fetchErr || !video || !video.script) {
-    throw new Error('يرجى توليد السكربت أو كتابته وحفظه أولاً قبل تفكيك المشاهد.')
-  }
+    if (fetchErr || !video || !video.script) {
+      return { success: false, error: 'يرجى توليد السكربت أو كتابته وحفظه أولاً قبل تفكيك المشاهد.' }
+    }
 
-  const systemPrompt = `أنت مخرج ومصمم بصري لقناة يوتيوب "baron | بارون".
+    const systemPrompt = `أنت مخرج ومصمم بصري لقناة يوتيوب "baron | بارون".
 مهمتك هي قراءة نص السكربت باللغة العربية، وتقسيمه إلى مشاهد متسلسلة، وتوليد وصف للقطة البصرية (Image Prompt) لكل مشهد باللغة الإنجليزية ليتم توليدها بالذكاء الاصطناعي.
 
 الستايل البصري الموحد الذي يجب أن تدمجه بالإنجليزية وتكتبه بالكامل في نهاية كل برومبت هو:
@@ -2655,10 +2659,10 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
 
 المعايير المحددة لتقطيع المشاهد:
 - طريقة التقسيم المطلوبة: ${
-    splitMethod === 'words' ? 'تقسيم قصير وسريع جداً (كل 8-12 كلمة مشهد للتنقل والمونتاج السريع).' :
-    splitMethod === 'sentences' ? 'تقسيم بعد كل جملة كاملة (جملة مفيدة).' :
-    'تقسيم درامي ذكي حسب سياق القصة وتدفق الأحداث.'
-  }
+      splitMethod === 'words' ? 'تقسيم قصير وسريع جداً (كل 8-12 كلمة مشهد للتنقل والمونتاج السريع).' :
+      splitMethod === 'sentences' ? 'تقسيم بعد كل جملة كاملة (جملة مفيدة).' :
+      'تقسيم درامي ذكي حسب سياق القصة وتدفق الأحداث.'
+    }
 
 المخرجات المطلوبة: يجب أن ترسل النتيجة بصيغة مصفوفة JSON صالحة ومباشرة دون أي نصوص إضافية (أو فواصل Markdown مثل \`\`\`json) تحتوي على كائنات بالبنية التالية:
 [
@@ -2670,19 +2674,18 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
   }
 ]`
 
-  const userPrompt = `حلل هذا السكربت وقسمه إلى مشاهد مبرمجاً برومبتات بالإنجليزية متطابقة مع الستايل الموحد:
+    const userPrompt = `حلل هذا السكربت وقسمه إلى مشاهد مبرمجاً برومبتات بالإنجليزية متطابقة مع الستايل الموحد:
 "${video.script}"`
 
-  const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
-  
-  let cleanedJson = responseContent.trim()
-  if (cleanedJson.startsWith("```json")) {
-    cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
-  } else if (cleanedJson.startsWith("```")) {
-    cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
-  }
+    const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    
+    let cleanedJson = responseContent.trim()
+    if (cleanedJson.startsWith("```json")) {
+      cleanedJson = cleanedJson.replace(/^```json/, "").replace(/```$/, "").trim()
+    } else if (cleanedJson.startsWith("```")) {
+      cleanedJson = cleanedJson.replace(/^```/, "").replace(/```$/, "").trim()
+    }
 
-  try {
     const storyboardArray = JSON.parse(cleanedJson)
     
     const { error: updateErr } = await supabase
@@ -2691,12 +2694,11 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
       .eq('id', videoId)
       .eq('user_id', profile.id)
 
-    if (updateErr) throw new Error(updateErr.message)
+    if (updateErr) return { success: false, error: updateErr.message }
 
-    revalidatePath(`/youtube/${videoId}`)
-    return storyboardArray
+    return { success: true, data: storyboardArray }
   } catch (err: any) {
-    throw new Error("فشل الذكاء الاصطناعي في صياغة مصفوفة المشاهد بشكل صحيح. يرجى المحاولة مجدداً. التفاصيل: " + err.message)
+    return { success: false, error: "فشل تفكيك المشاهد وصياغتها بالذكاء الاصطناعي: " + err.message }
   }
 }
 

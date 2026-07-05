@@ -324,9 +324,11 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   }
 
   const openTimeModal = (stepId: string) => {
+    const step = steps.find(s => s.id === stepId)
+    const currentMins = step?.work_minutes || 0
     setSelectedStepId(stepId)
-    setLogHours(0)
-    setLogMinutes(0)
+    setLogHours(Math.floor(currentMins / 60))
+    setLogMinutes(currentMins % 60)
     setIsTimeModalOpen(true)
   }
 
@@ -334,11 +336,10 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
     e.preventDefault()
     if (!selectedStepId) return
 
-    const addedMinutes = (logHours * 60) + logMinutes
+    const totalMinutes = (logHours * 60) + logMinutes
     const updated = steps.map(s => {
       if (s.id === selectedStepId) {
-        const current = s.work_minutes || 0
-        return { ...s, work_minutes: Math.max(0, current + addedMinutes) }
+        return { ...s, work_minutes: Math.max(0, totalMinutes) }
       }
       return s
     })
@@ -346,7 +347,7 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
     saveSteps(updated)
     setIsTimeModalOpen(false)
     setSelectedStepId(null)
-    showToast('تم تسجيل وقت العمل بنجاح ⏱️', 'success')
+    showToast('تم تحديث وقت العمل بنجاح ⏱️', 'success')
   }
 
   const handleDeleteStep = (stepId: string) => {
