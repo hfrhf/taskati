@@ -32,6 +32,7 @@ interface Profile {
   is_ai_enabled?: boolean
   azure_ai_key?: string | null
   azure_ai_endpoint?: string | null
+  azure_ai_model?: string | null
 }
 
 interface ReferenceScript {
@@ -56,6 +57,7 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
   const [isAIEnabled, setIsAIEnabled] = useState(profile.is_ai_enabled || false)
   const [apiKey, setApiKey] = useState(profile.azure_ai_key || '')
   const [apiEndpoint, setApiEndpoint] = useState(profile.azure_ai_endpoint || '')
+  const [apiModel, setApiModel] = useState(profile.azure_ai_model || '')
   const [showKey, setShowKey] = useState(false)
   const [showAICreds, setShowAICreds] = useState(!profile.azure_ai_key)
 
@@ -84,7 +86,7 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
 
     startTransition(async () => {
       try {
-        const updated = await updateAISettings(isAIEnabled, apiKey, apiEndpoint)
+        const updated = await updateAISettings(isAIEnabled, apiKey, apiEndpoint, apiModel)
         setProfile(updated)
         showToast('تمت تحديث إعدادات الذكاء الاصطناعي بنجاح ✅', 'success')
       } catch (err: any) {
@@ -255,6 +257,18 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
                         onChange={(e) => setApiEndpoint(e.target.value)}
                         required={isAIEnabled}
                         placeholder="https://..."
+                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-2.5 text-xs transition-all outline-none font-mono" 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-theme-text-muted mb-1.5">اسم الموديل (Model Deployment Name)</label>
+                      <input 
+                        type="text" 
+                        value={apiModel}
+                        onChange={(e) => setApiModel(e.target.value)}
+                        required={isAIEnabled}
+                        placeholder="مثال: gpt-4o أو gpt-4o-mini..."
                         className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-2.5 text-xs transition-all outline-none font-mono" 
                       />
                     </div>

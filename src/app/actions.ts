@@ -2395,7 +2395,7 @@ export async function logTaskMinutes(taskId: string, minutes: number) {
 // 19. عمليات مساعد الذكاء الاصطناعي لاستوديو يوتيوب (Azure AI Studio Actions)
 // --------------------------------------------------------------------
 
-async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: string, userPrompt: string) {
+async function callAzureAI(apiKey: string, endpoint: string, modelName: string, systemPrompt: string, userPrompt: string) {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), 30000) // تحديد مهلة قصوى 30 ثانية للوقاية
 
@@ -2405,6 +2405,7 @@ async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: strin
     let requestBody: any = {}
     if (isResponsesApi) {
       requestBody = {
+        model: modelName || 'gpt-4o',
         instructions: systemPrompt,
         input: userPrompt,
         max_output_tokens: 3000,
@@ -2412,6 +2413,7 @@ async function callAzureAI(apiKey: string, endpoint: string, systemPrompt: strin
       }
     } else {
       requestBody = {
+        model: modelName || 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -2550,7 +2552,7 @@ export async function deleteAIReferenceScript(id: string) {
   return { success: true }
 }
 
-export async function updateAISettings(isEnabled: boolean, apiKey: string | null, apiEndpoint: string | null) {
+export async function updateAISettings(isEnabled: boolean, apiKey: string | null, apiEndpoint: string | null, apiModel: string | null) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
   if (!profile) throw new Error('غير مصرح بالدخول')
@@ -2560,7 +2562,8 @@ export async function updateAISettings(isEnabled: boolean, apiKey: string | null
     .update({
       is_ai_enabled: isEnabled,
       azure_ai_key: apiKey?.trim() || null,
-      azure_ai_endpoint: apiEndpoint?.trim() || null
+      azure_ai_endpoint: apiEndpoint?.trim() || null,
+      azure_ai_model: apiModel?.trim() || null
     })
     .eq('id', profile.id)
     .select()
@@ -2609,6 +2612,7 @@ export async function generateYoutubeScript(
 
     const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
     const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiModel = profile.azure_ai_model || process.env.AZURE_AI_MODEL || 'gpt-4o'
 
     if (!apiKey || !apiEndpoint) {
       return { success: false, error: 'يرجى تعبئة مفتاح الـ API والـ Endpoint الخاصة بك في الإعدادات أولاً لتفعيل التوليد.' }
@@ -2643,7 +2647,7 @@ ${examplesText}
     const userPrompt = `اكتب لي سكربت فيديو يوتيوب مشوق حول الموضوع التالي بالتفصيل مستوحى من البصمة الفنية الموضحة:
 "${topic}"`
 
-    const generatedText = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    const generatedText = await callAzureAI(apiKey, apiEndpoint, apiModel, systemPrompt, userPrompt)
 
     const { error: updateErr } = await supabase
       .from('youtube_videos')
@@ -2669,6 +2673,7 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
 
     const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
     const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiModel = profile.azure_ai_model || process.env.AZURE_AI_MODEL || 'gpt-4o'
 
     if (!apiKey || !apiEndpoint) {
       return { success: false, error: 'يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.' }
@@ -2711,7 +2716,7 @@ export async function generateStoryboardPrompts(videoId: string, splitMethod: 'w
     const userPrompt = `حلل هذا السكربت وقسمه إلى مشاهد مبرمجاً برومبتات بالإنجليزية متطابقة مع الستايل الموحد:
 "${video.script}"`
 
-    const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    const responseContent = await callAzureAI(apiKey, apiEndpoint, apiModel, systemPrompt, userPrompt)
     
     let cleanedJson = responseContent.trim()
     if (cleanedJson.startsWith("```json")) {
@@ -2746,6 +2751,7 @@ export async function generateYoutubeSEO(videoId: string) {
 
     const apiKey = profile.azure_ai_key || process.env.AZURE_AI_KEY
     const apiEndpoint = profile.azure_ai_endpoint || process.env.AZURE_AI_ENDPOINT
+    const apiModel = profile.azure_ai_model || process.env.AZURE_AI_MODEL || 'gpt-4o'
 
     if (!apiKey || !apiEndpoint) {
       return { success: false, error: 'يرجى تهيئة مفتاح الـ API والـ Endpoint في صفحة الإعدادات.' }
@@ -2775,7 +2781,7 @@ export async function generateYoutubeSEO(videoId: string) {
     const userPrompt = `حلل هذا السكربت وولد بيانات السيو والعناوين المقترحة:
 "${video.script}"`
 
-    const responseContent = await callAzureAI(apiKey, apiEndpoint, systemPrompt, userPrompt)
+    const responseContent = await callAzureAI(apiKey, apiEndpoint, apiModel, systemPrompt, userPrompt)
     
     let cleanedJson = responseContent.trim()
     if (cleanedJson.startsWith("```json")) {

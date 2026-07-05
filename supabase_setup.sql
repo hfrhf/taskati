@@ -551,6 +551,7 @@ alter table public.youtube_videos add column if not exists storyboard jsonb defa
 alter table public.profiles add column if not exists is_ai_enabled boolean default false;
 alter table public.profiles add column if not exists azure_ai_key text;
 alter table public.profiles add column if not exists azure_ai_endpoint text;
+alter table public.profiles add column if not exists azure_ai_model text;
 
 -- 23. إنشاء جدول النصوص المرجعية للأسلوب
 create table if not exists public.ai_reference_scripts (
