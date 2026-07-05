@@ -2397,7 +2397,7 @@ export async function logTaskMinutes(taskId: string, minutes: number) {
 
 async function callAzureAI(apiKey: string, endpoint: string, modelName: string, systemPrompt: string, userPrompt: string) {
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 30000) // تحديد مهلة قصوى 30 ثانية للوقاية
+  const timeoutId = setTimeout(() => controller.abort(), 120000) // تحديد مهلة قصوى 120 ثانية لتمكين موديلات الاستدلال من التفكير والاستجابة الكافية
 
   try {
     const isResponsesApi = endpoint.includes('/responses') || endpoint.includes('/v1/responses')
@@ -2466,7 +2466,7 @@ async function callAzureAI(apiKey: string, endpoint: string, modelName: string, 
   } catch (error: any) {
     clearTimeout(timeoutId)
     if (error.name === 'AbortError') {
-      throw new Error('انتهت مهلة استدعاء الذكاء الاصطناعي (30 ثانية). يرجى المحاولة مرة أخرى لضمان الأمان.')
+      throw new Error('انتهت مهلة استدعاء الذكاء الاصطناعي (120 ثانية). يرجى المحاولة مرة أخرى لضمان الأمان.')
     }
     throw error
   }
