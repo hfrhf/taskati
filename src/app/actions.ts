@@ -1970,12 +1970,32 @@ export async function getYoutubeVideos() {
   if (error) throw new Error(error.message)
   if (!videos || videos.length === 0) return []
 
-  // حساب ساعات العمل والمهام لكل فيديو بناءً على حقل الخطوات
+  // جلب كافة المهام المرتبطة بأي فيديو للمستخدم
+  const { data: allTasks } = await supabase
+    .from('tasks')
+    .select('video_id, work_minutes')
+    .eq('assigned_to', profile.id)
+    .not('video_id', 'is', null)
+
+  const tasksMap: Record<string, number> = {}
+  if (allTasks) {
+    allTasks.forEach((t: any) => {
+      if (t.video_id) {
+        tasksMap[t.video_id] = (tasksMap[t.video_id] || 0) + (t.work_minutes || 0)
+      }
+    })
+  }
+
+  // حساب ساعات العمل والمهام لكل فيديو بناءً على حقل الخطوات والمهام المربوطة بالفيديو
   const videosWithStats = videos.map((video) => {
     const stepsList = video.steps || []
     const totalTasks = stepsList.length
     const completedTasks = stepsList.filter((s: any) => s.completed).length
-    const totalMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    
+    const stepsMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    const tasksMinutes = tasksMap[video.id] || 0
+    const totalMinutes = stepsMinutes + tasksMinutes
+    
     const totalHours = Math.round((totalMinutes / 60) * 10) / 10
 
     return {
@@ -2018,7 +2038,7 @@ export async function getYoutubeVideoDetails(videoId: string) {
 
   if (tasksError) throw new Error(tasksError.message)
 
-  // حساب توزيع الوقت على مراحل الإنتاج بناءً على الخطوات
+  // حساب توزيع الوقت على مراحل الإنتاج بناءً على الخطوات والمهام المرتبطة بالفيديو
   const stepsList = video.steps || []
   const phases = {
     scripting: { name: 'السيناريو والكتابة ✍️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 },
@@ -2028,6 +2048,7 @@ export async function getYoutubeVideoDetails(videoId: string) {
     other: { name: 'أعمال أخرى ⚙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 }
   }
 
+  // إضافة دقائق الخطوات
   stepsList.forEach((s: any) => {
     const phaseKey = (s.phase || 'other') as keyof typeof phases
     if (phases[phaseKey]) {
@@ -2039,13 +2060,25 @@ export async function getYoutubeVideoDetails(videoId: string) {
     }
   })
 
+  // إضافة دقائق المهام المرتبطة بالفيديو إلى مراحلها المقابلة
+  if (tasks) {
+    tasks.forEach((t: any) => {
+      const phaseKey = (t.video_phase || 'other') as keyof typeof phases
+      if (phases[phaseKey]) {
+        phases[phaseKey].minutes += t.work_minutes || 0
+      }
+    })
+  }
+
   // تحويل الدقائق إلى ساعات وتدويرها
   Object.keys(phases).forEach((key) => {
     const k = key as keyof typeof phases
     phases[k].hours = Math.round((phases[k].minutes / 60) * 10) / 10
   })
 
-  const totalMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+  const stepsMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+  const tasksMinutes = (tasks || []).reduce((sum: number, t: any) => sum + (t.work_minutes || 0), 0)
+  const totalMinutes = stepsMinutes + tasksMinutes
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10
   const completedTasks = stepsList.filter((s: any) => s.completed).length
   const progress = stepsList.length > 0 ? Math.round((completedTasks / stepsList.length) * 100) : 0
@@ -2215,6 +2248,29 @@ export async function getYoutubeAnalytics() {
     }
   }
 
+  // جلب كافة المهام المرتبطة بأي فيديو للمستخدم
+  const { data: allTasks } = await supabase
+    .from('tasks')
+    .select('video_id, work_minutes, video_phase')
+    .eq('assigned_to', profile.id)
+    .not('video_id', 'is', null)
+
+  const tasksMap: Record<string, number> = {}
+  const taskPhaseMinutes = { scripting: 0, recording: 0, editing: 0, publishing: 0 }
+  
+  if (allTasks) {
+    allTasks.forEach((t: any) => {
+      if (t.video_id) {
+        tasksMap[t.video_id] = (tasksMap[t.video_id] || 0) + (t.work_minutes || 0)
+      }
+      const phase = t.video_phase
+      if (phase === 'scripting') taskPhaseMinutes.scripting += t.work_minutes || 0
+      else if (phase === 'recording') taskPhaseMinutes.recording += t.work_minutes || 0
+      else if (phase === 'editing') taskPhaseMinutes.editing += t.work_minutes || 0
+      else if (phase === 'publishing') taskPhaseMinutes.publishing += t.work_minutes || 0
+    })
+  }
+
   let totalMinutesSum = 0
   let scriptingMinutes = 0
   let recordingMinutes = 0
@@ -2224,7 +2280,9 @@ export async function getYoutubeAnalytics() {
 
   const videoStats = videos.map((video) => {
     const stepsList = video.steps || []
-    const minutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    const stepsMins = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
+    const tasksMins = tasksMap[video.id] || 0
+    const minutes = stepsMins + tasksMins
     totalMinutesSum += minutes
 
     if (video.status === 'published' || video.status === 'completed') {
@@ -2245,6 +2303,12 @@ export async function getYoutubeAnalytics() {
       status: video.status
     }
   })
+
+  // إضافة دقائق المهام للمراحل الإجمالية للتحليلات
+  scriptingMinutes += taskPhaseMinutes.scripting
+  recordingMinutes += taskPhaseMinutes.recording
+  editingMinutes += taskPhaseMinutes.editing
+  publishingMinutes += taskPhaseMinutes.publishing
 
   const divisor = completedVideosCount || videos.length || 1
   const phaseAverages = {
