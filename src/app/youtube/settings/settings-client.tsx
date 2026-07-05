@@ -57,6 +57,7 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
   const [apiKey, setApiKey] = useState(profile.azure_ai_key || '')
   const [apiEndpoint, setApiEndpoint] = useState(profile.azure_ai_endpoint || '')
   const [showKey, setShowKey] = useState(false)
+  const [showAICreds, setShowAICreds] = useState(!profile.azure_ai_key)
 
   // نموذج إضافة سكربت مرجعي جديد
   const [scriptTitle, setScriptTitle] = useState('')
@@ -184,10 +185,20 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
             </div>
           </div>
 
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setShowAICreds(!showAICreds)}
+              className="px-4 py-2 bg-theme-panel hover:bg-theme-bg border border-theme-border text-theme-text rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+            >
+              <span>{showAICreds ? "📁 إخفاء مفاتيح الربط بالـ AI" : "⚙️ إظهار مفاتيح الربط بالـ AI"}</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
             
             {/* إعدادات التفعيل والمفاتيح */}
-            <div className="md:col-span-5 bg-theme-panel border border-theme-border rounded-3xl p-6 shadow-sm space-y-6">
+            {showAICreds && (
+              <div className="md:col-span-5 bg-theme-panel border border-theme-border rounded-3xl p-6 shadow-sm space-y-6 animate-modal-in">
               <div>
                 <h2 className="text-sm font-black text-theme-text flex items-center gap-2 justify-start">
                   <Settings className="w-4.5 h-4.5 text-theme-accent" />
@@ -273,9 +284,10 @@ export default function SettingsClient({ currentProfile, initialReferenceScripts
                 </p>
               </div>
             </div>
+          )}
 
             {/* إدارة السكربتات المرجعية للأسلوب */}
-            <div className="md:col-span-7 bg-theme-panel border border-theme-border rounded-3xl p-6 shadow-sm space-y-6">
+            <div className={`${showAICreds ? 'md:col-span-7' : 'md:col-span-12'} bg-theme-panel border border-theme-border rounded-3xl p-6 shadow-sm space-y-6 transition-all duration-300`}>
               <div className="flex items-center justify-between gap-4 border-b border-theme-border/60 pb-4">
                 <div>
                   <h2 className="text-sm font-black text-theme-text flex items-center gap-2 justify-start">
