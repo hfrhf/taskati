@@ -754,9 +754,9 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
 
                         {/* وقت العمل المنجز في الخطوة */}
                         <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-lg border border-theme-border bg-theme-input ${
-                          step.work_minutes > 0 ? 'text-indigo-400' : 'text-theme-text-muted'
+                          (step.total_minutes ?? step.work_minutes) > 0 ? 'text-indigo-400' : 'text-theme-text-muted'
                         }`}>
-                          ⏱️ {Math.floor((step.work_minutes || 0) / 60)}س { (step.work_minutes || 0) % 60 }د
+                          ⏱️ {Math.floor(((step.total_minutes ?? step.work_minutes) || 0) / 60)}س { ((step.total_minutes ?? step.work_minutes) || 0) % 60 }د
                         </span>
 
                         {/* إجراءات سريعة */}

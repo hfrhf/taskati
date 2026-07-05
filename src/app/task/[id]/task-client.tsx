@@ -84,11 +84,16 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
   const [taskDueDate, setTaskDueDate] = useState(task.due_date || '')
   const [taskMilestoneId, setTaskMilestoneId] = useState(task.milestone_id || '')
   const [taskColor, setTaskColor] = useState(task.color || 'classic')
+  
+  const [selectedVideoId, setSelectedVideoId] = useState(task.video_id || '')
+  const [taskVideoStepId, setTaskVideoStepId] = useState(task.video_step_id || '')
 
   const openEditModal = () => {
     setTaskDueDate(task.due_date || '')
     setTaskMilestoneId(task.milestone_id || '')
     setTaskColor(task.color || 'classic')
+    setSelectedVideoId(task.video_id || '')
+    setTaskVideoStepId(task.video_step_id || '')
     setIsEditModalOpen(true)
   }
 
@@ -181,6 +186,7 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
     const workMinutes = workHours * 60 + workMins
     const videoId = (formData.get('video_id') as string) || null
     const videoPhase = (formData.get('video_phase') as string) || null
+    const videoStepId = (formData.get('video_step_id') as string) || null
 
     try {
       setIsSavingDetails(true)
@@ -194,7 +200,8 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
         taskColor,
         workMinutes,
         videoId,
-        videoPhase
+        videoPhase,
+        videoStepId
       )
 
       // البحث عن المسؤول في قائمة الفريق لتحديث الاسم والصورة بالواجهة
@@ -217,6 +224,7 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
         work_minutes: workMinutes,
         video_id: videoId,
         video_phase: videoPhase,
+        video_step_id: videoStepId,
         video: selectedVideo ? { id: selectedVideo.id, title: selectedVideo.title } : null
       })
 
@@ -327,18 +335,28 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                     </span>
                   )}
 
-                  {task.video_id && (
-                    <span className="bg-rose-500/10 text-rose-450 px-2.5 py-0.5 rounded-md font-bold text-[10px] border border-rose-500/20 flex items-center gap-1">
-                      🎬 {task.video?.title ? `فيديو: ${task.video.title}` : 'فيديو مرتبط'} 
-                      <span className="text-theme-text-muted">|</span>
-                      <span>
-                        {task.video_phase === 'scripting' ? 'كتابة السيناريو ✍️' : 
-                         task.video_phase === 'recording' ? 'التصوير والتسجيل 🎙️' : 
-                         task.video_phase === 'editing' ? 'المونتاج والتحريك 🎬' : 
-                         task.video_phase === 'publishing' ? 'الغلاف والنشر 🎨' : 'عمل آخر'}
+                  {task.video_id && (() => {
+                    const taskVideo = youtubeVideos.find(v => v.id === task.video_id)
+                    const taskStep = taskVideo?.steps?.find((s: any) => s.id === task.video_step_id)
+                    return (
+                      <span className="bg-rose-500/10 text-rose-450 px-2.5 py-0.5 rounded-md font-bold text-[10px] border border-rose-500/20 flex items-center gap-1 flex-wrap">
+                        <span>🎬 {task.video?.title ? `فيديو: ${task.video.title}` : 'فيديو مرتبط'}</span>
+                        <span className="text-theme-text-muted">|</span>
+                        <span>
+                          {task.video_phase === 'scripting' ? 'كتابة السيناريو ✍️' : 
+                           task.video_phase === 'recording' ? 'التصوير والتسجيل 🎙️' : 
+                           task.video_phase === 'editing' ? 'المونتاج والتحريك 🎬' : 
+                           task.video_phase === 'publishing' ? 'الغلاف والنشر 🎨' : 'عمل آخر'}
+                        </span>
+                        {taskStep && (
+                          <>
+                            <span className="text-theme-text-muted">|</span>
+                            <span className="text-indigo-400">📋 الخطوة: {taskStep.title}</span>
+                          </>
+                        )}
                       </span>
-                    </span>
-                  )}
+                    )
+                  })()}
 
                   {task.milestone && (
                     <span className="inline-block text-[10px] text-theme-accent bg-theme-accent/10 border border-theme-accent/20 px-2.5 py-0.5 rounded-md font-bold">
@@ -529,7 +547,11 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                   <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
                   <select 
                     name="video_id"
-                    defaultValue={task.video_id || ''}
+                    value={selectedVideoId}
+                    onChange={(e) => {
+                      setSelectedVideoId(e.target.value)
+                      setTaskVideoStepId('')
+                    }}
                     className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
                   >
                     <option value="">عمل عام / غير مرتبط بفيديو</option>
@@ -550,20 +572,55 @@ export default function TaskDetailClient({ currentProfile, initialTask, initialF
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
-                <select 
-                  name="video_phase"
-                  defaultValue={task.video_phase || 'other'}
-                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
-                >
-                  <option value="other">أخرى / عمل عام</option>
-                  <option value="scripting">✍️ السيناريو والكتابة</option>
-                  <option value="recording">🎙️ التصوير والتسجيل</option>
-                  <option value="editing">🎬 المونتاج والتحريك</option>
-                  <option value="publishing">🎨 الغلاف والنشر</option>
-                </select>
-              </div>
+              {selectedVideoId && (() => {
+                const currentVid = youtubeVideos.find(v => v.id === selectedVideoId)
+                const videoSteps = currentVid?.steps || []
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
+                      <select 
+                        name="video_phase"
+                        defaultValue={task.video_phase || 'other'}
+                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                      >
+                        <option value="other">أخرى / عمل عام</option>
+                        <option value="scripting">✍️ السيناريو والكتابة</option>
+                        <option value="recording">🎙️ التصوير والتسجيل</option>
+                        <option value="editing">🎬 المونتاج والتحريك</option>
+                        <option value="publishing">🎨 الغلاف والنشر</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">خطوة الإنتاج المحددة (اختياري)</label>
+                      <select 
+                        name="video_step_id"
+                        value={taskVideoStepId}
+                        onChange={(e) => setTaskVideoStepId(e.target.value)}
+                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                      >
+                        <option value="">غير مرتبط بخطوة محددة</option>
+                        {videoSteps.map((step: any) => {
+                          const phaseLabels: Record<string, string> = {
+                            scripting: 'سيناريو',
+                            recording: 'تسجيل',
+                            editing: 'مونتاج',
+                            publishing: 'نشر',
+                            other: 'أخرى'
+                          }
+                          const phaseLabel = phaseLabels[step.phase || 'other'] || 'أخرى'
+                          return (
+                            <option key={step.id} value={step.id}>
+                              {step.title} ({phaseLabel})
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div>
                 <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المحطة الكبرى المرتبطة (Milestone)</label>

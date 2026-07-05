@@ -255,7 +255,8 @@ export async function addTask(
   milestoneId?: string | null,
   workMinutes?: number,
   videoId?: string | null,
-  videoPhase?: string | null
+  videoPhase?: string | null,
+  videoStepId?: string | null
 ) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
@@ -272,7 +273,8 @@ export async function addTask(
     milestone_id: milestoneId || null,
     work_minutes: workMinutes || 0,
     video_id: videoId || null,
-    video_phase: videoPhase || null
+    video_phase: videoPhase || null,
+    video_step_id: videoStepId || null
   }
 
   const { data, error } = await supabase
@@ -340,7 +342,8 @@ export async function updateTaskDetails(
   color?: string | null,
   workMinutes?: number,
   videoId?: string | null,
-  videoPhase?: string | null
+  videoPhase?: string | null,
+  videoStepId?: string | null
 ) {
   const supabase = await createClient()
   const profile = await getCurrentUserProfile()
@@ -358,6 +361,7 @@ export async function updateTaskDetails(
   if (workMinutes !== undefined) updateData.work_minutes = workMinutes
   if (videoId !== undefined) updateData.video_id = videoId || null
   if (videoPhase !== undefined) updateData.video_phase = videoPhase || null
+  if (videoStepId !== undefined) updateData.video_step_id = videoStepId || null
 
   const { error } = await supabase
     .from('tasks')
@@ -2048,11 +2052,21 @@ export async function getYoutubeVideoDetails(videoId: string) {
     other: { name: 'أعمال أخرى ⚙️', minutes: 0, hours: 0, tasksCount: 0, completedCount: 0 }
   }
 
-  // إضافة دقائق الخطوات
-  stepsList.forEach((s: any) => {
+  // حساب إجمالي الدقائق لكل خطوة بما يشمل المهام المكتملة المرتبطة بها
+  const stepsWithTotalMinutes = stepsList.map((s: any) => {
+    const stepTasks = (tasks || []).filter((t: any) => t.video_step_id === s.id && t.status === 'completed')
+    const stepTasksMinutes = stepTasks.reduce((sum: number, t: any) => sum + (t.work_minutes || 0), 0)
+    return {
+      ...s,
+      total_minutes: (s.work_minutes || 0) + stepTasksMinutes
+    }
+  })
+
+  // إضافة دقائق الخطوات إلى المراحل
+  stepsWithTotalMinutes.forEach((s: any) => {
     const phaseKey = (s.phase || 'other') as keyof typeof phases
     if (phases[phaseKey]) {
-      phases[phaseKey].minutes += s.work_minutes || 0
+      phases[phaseKey].minutes += s.total_minutes || 0
       phases[phaseKey].tasksCount += 1
       if (s.completed) {
         phases[phaseKey].completedCount += 1
@@ -2060,12 +2074,14 @@ export async function getYoutubeVideoDetails(videoId: string) {
     }
   })
 
-  // إضافة دقائق المهام المرتبطة بالفيديو إلى مراحلها المقابلة
+  // إضافة دقائق المهام المرتبطة بالفيديو إلى مراحلها المقابلة (فقط للمهام غير المربوطة بخطوة محددة، أو غير المكتملة بعد لمنع التكرار)
   if (tasks) {
     tasks.forEach((t: any) => {
-      const phaseKey = (t.video_phase || 'other') as keyof typeof phases
-      if (phases[phaseKey]) {
-        phases[phaseKey].minutes += t.work_minutes || 0
+      if (!t.video_step_id || t.status !== 'completed') {
+        const phaseKey = (t.video_phase || 'other') as keyof typeof phases
+        if (phases[phaseKey]) {
+          phases[phaseKey].minutes += t.work_minutes || 0
+        }
       }
     })
   }
@@ -2086,6 +2102,7 @@ export async function getYoutubeVideoDetails(videoId: string) {
   return {
     video: {
       ...video,
+      steps: stepsWithTotalMinutes,
       totalHours,
       totalTasks: stepsList.length,
       completedTasks,

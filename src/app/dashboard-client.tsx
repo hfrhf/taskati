@@ -138,6 +138,8 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null)
 
   const [taskDueDate, setTaskDueDate] = useState('')
+  const [selectedVideoId, setSelectedVideoId] = useState('')
+  const [taskVideoStepId, setTaskVideoStepId] = useState('')
 
   // تصفية المجموعات للآدمن (مجموعاتي، المجموعات العامة، الشركاء الآخرين)
   const [activeTab, setActiveTab] = useState<string>('my-groups')
@@ -146,6 +148,8 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
   useEffect(() => {
     if (isTaskModalOpen) {
       setTaskDueDate(selectedDate)
+      setSelectedVideoId('')
+      setTaskVideoStepId('')
     }
   }, [isTaskModalOpen, selectedDate])
 
@@ -300,9 +304,10 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
 
     const videoId = formData.get('video_id') as string || null
     const videoPhase = formData.get('video_phase') as string || null
+    const videoStepId = formData.get('video_step_id') as string || null
 
     try {
-      await addTask(title, description, activeGroupId, assignedTo, dueDate, color, milestoneId || undefined, 0, videoId, videoPhase)
+      await addTask(title, description, activeGroupId, assignedTo, dueDate, color, milestoneId || undefined, 0, videoId, videoPhase, videoStepId)
       showToast('تمت إضافة المهمة بنجاح لقائمة اليوم 🚀', 'success')
       setIsTaskModalOpen(false)
       form.reset()
@@ -843,6 +848,11 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                   <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
                   <select 
                     name="video_id"
+                    value={selectedVideoId}
+                    onChange={(e) => {
+                      setSelectedVideoId(e.target.value)
+                      setTaskVideoStepId('')
+                    }}
                     className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
                   >
                     <option value="">عمل عام / غير مرتبط بفيديو</option>
@@ -863,19 +873,54 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
-                <select 
-                  name="video_phase"
-                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
-                >
-                  <option value="other">أخرى / عمل عام</option>
-                  <option value="scripting">✍️ السيناريو والكتابة</option>
-                  <option value="recording">🎙️ التصوير والتسجيل</option>
-                  <option value="editing">🎬 المونتاج والتحريك</option>
-                  <option value="publishing">🎨 الغلاف والنشر</option>
-                </select>
-              </div>
+              {selectedVideoId && (() => {
+                const currentVid = youtubeVideos.find(v => v.id === selectedVideoId)
+                const videoSteps = currentVid?.steps || []
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-modal-in">
+                    <div>
+                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
+                      <select 
+                        name="video_phase"
+                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                      >
+                        <option value="other">أخرى / عمل عام</option>
+                        <option value="scripting">✍️ السيناريو والكتابة</option>
+                        <option value="recording">🎙️ التصوير والتسجيل</option>
+                        <option value="editing">🎬 المونتاج والتحريك</option>
+                        <option value="publishing">🎨 الغلاف والنشر</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">خطوة الإنتاج المحددة (اختياري)</label>
+                      <select 
+                        name="video_step_id"
+                        value={taskVideoStepId}
+                        onChange={(e) => setTaskVideoStepId(e.target.value)}
+                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                      >
+                        <option value="">غير مرتبط بخطوة محددة</option>
+                        {videoSteps.map((step: any) => {
+                          const phaseLabels: Record<string, string> = {
+                            scripting: 'سيناريو',
+                            recording: 'تسجيل',
+                            editing: 'مونتاج',
+                            publishing: 'نشر',
+                            other: 'أخرى'
+                          }
+                          const phaseLabel = phaseLabels[step.phase || 'other'] || 'أخرى'
+                          return (
+                            <option key={step.id} value={step.id}>
+                              {step.title} ({phaseLabel})
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div>
                 <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المحطة الكبرى المرتبطة (Milestone)</label>
