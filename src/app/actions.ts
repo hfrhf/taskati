@@ -986,10 +986,10 @@ export async function getMonthlyAnalytics(month: number, year: number) {
   const lastDay = new Date(year, month, 0).getDate()
   const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
 
-  // 1. جلب التقارير اليومية للمستخدم الحالي في هذا الشهر
+  // 1. جلب التقارير اليومية للمستخدم الحالي في هذا الشهر (كاملة مع المحطة لعدم التأخير في العرض)
   const { data: standups, error: standupsError } = await supabase
     .from('daily_standups')
-    .select('date, work_minutes, productivity_score, mood')
+    .select('*, milestone:project_milestones(id, title)')
     .eq('user_id', profile.id)
     .gte('date', startDate)
     .lte('date', endDate)
@@ -1113,6 +1113,8 @@ export async function getMonthlyAnalytics(month: number, year: number) {
       dailyBreakdown[s.date].journalMinutes = s.work_minutes
       dailyBreakdown[s.date].productivityScore = s.productivity_score
       dailyBreakdown[s.date].mood = s.mood
+      // تخزين تفاصيل الجرنال اليومي بالكامل لتفادي استدعاء الخادم عند النقر
+      ;(dailyBreakdown[s.date] as any).standupDetails = s
     }
   });
 

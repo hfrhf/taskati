@@ -43,6 +43,7 @@ interface DailyBreakdownItem {
   tasksCount: number
   productivityScore: number
   mood: string
+  standupDetails?: any
 }
 
 interface AnalyticsData {
@@ -115,25 +116,12 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
     setToast({ message, type })
   }
 
-  const handleDayClick = async (dateStr: string, dayItem: any) => {
+  const handleDayClick = (dateStr: string, dayItem: any) => {
     setSelectedDayDate(dateStr)
     setSelectedDayTasksCount(dayItem?.tasksCount || 0)
     setSelectedDayWorkMinutes(dayItem?.workMinutes || 0)
+    setSelectedDayDetails(dayItem?.standupDetails || null)
     setIsModalOpen(true)
-    setIsLoadingDetails(true)
-    setSelectedDayDetails(null)
-    try {
-      const standups = await getDailyStandups(dateStr)
-      // البحث عن تقرير المستخدم الحالي لتلك اليومية
-      const userStandup = (standups as any[]).find(s => s.user_id === currentProfile.id)
-      if (userStandup) {
-        setSelectedDayDetails(userStandup)
-      }
-    } catch (err: any) {
-      showToast('فشل جلب تفاصيل اللقاء اليومي: ' + err.message, 'error')
-    } finally {
-      setIsLoadingDetails(false)
-    }
   }
 
   const handleFetchData = async (selectedMonth: number, selectedYear: number) => {
@@ -292,7 +280,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             
             {/* الجزء الأيمن: مخطط توزيع الوقت الدائري */}
-            <div className="lg:col-span-5 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right flex flex-col">
+            <div className="lg:col-span-12 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right flex flex-col">
               <div>
                 <h3 className="text-sm font-black text-theme-text flex items-center gap-2">
                   <PieChart className="w-4.5 h-4.5 text-theme-accent" />
@@ -301,7 +289,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                 <p className="text-[10px] text-theme-text-muted mt-0.5">تحليل الساعات المخصصة لكل مجموعة عمل هذا الشهر</p>
               </div>
 
-              <div className="mt-8 flex flex-col items-center justify-center gap-6">
+              <div className="mt-8 flex flex-col md:flex-row items-center justify-center gap-12 w-full">
                 {/* الدائرة البيانية */}
                 <div className="relative w-40 h-40 shrink-0">
                   {totalHoursSum > 0 ? (
@@ -377,7 +365,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                 </div>
 
                 {/* وسيلة الإيضاح */}
-                <div className="w-full space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
+                <div className="w-full md:max-w-md space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
                   {chartData.map((item, idx) => {
                     const pct = totalHoursSum > 0 ? (item.totalHours / totalHoursSum) * 100 : 0
                     const isHovered = hoveredSlice === idx
@@ -408,7 +396,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
             </div>
 
             {/* الجزء الأيسر: النشاط اليومي التفصيلي (تقويم تفاعلي) */}
-            <div className="lg:col-span-7 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right space-y-6">
+            <div className="lg:col-span-12 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right space-y-6">
               {/* ترويسة التقويم ومفتاح الألوان */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-theme-border pb-4 w-full" dir="rtl">
                 <div>
@@ -705,12 +693,21 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                   <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
                     <AlertCircle className="w-6 h-6" />
                   </div>
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-theme-text">لم تقم بتسجيل يومياتك لهذا اليوم</h4>
-                    <p className="text-xs text-theme-text-muted leading-relaxed">
-                      الجرنال اليومي يساعدك على تتبع وتوثيق إنجازاتك المزاجية والإنتاجية.
-                    </p>
-                  </div>
+                  {selectedDayWorkMinutes === 0 && selectedDayTasksCount === 0 ? (
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-theme-text">لا توجد مساهمات في هذا اليوم</h4>
+                      <p className="text-xs text-theme-text-muted leading-relaxed">
+                        لم يتم تسجيل أي ساعات عمل أو مهام منجزة في هذا التاريخ.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-theme-text">لم تقم بتسجيل يومياتك لهذا اليوم</h4>
+                      <p className="text-xs text-theme-text-muted leading-relaxed">
+                        الجرنال اليومي يساعدك على تتبع وتوثيق إنجازاتك المزاجية والإنتاجية.
+                      </p>
+                    </div>
+                  )}
 
                   {/* عرض النشاط التلقائي من المهام */}
                   {(selectedDayWorkMinutes > 0 || selectedDayTasksCount > 0) && (
