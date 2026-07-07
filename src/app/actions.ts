@@ -1977,15 +1977,22 @@ export async function getYoutubeVideos() {
   // جلب كافة المهام المرتبطة بأي فيديو للمستخدم
   const { data: allTasks } = await supabase
     .from('tasks')
-    .select('video_id, work_minutes')
+    .select('video_id, work_minutes, status')
     .eq('assigned_to', profile.id)
     .not('video_id', 'is', null)
 
-  const tasksMap: Record<string, number> = {}
+  const tasksMap: Record<string, { minutes: number; total: number; completed: number }> = {}
   if (allTasks) {
     allTasks.forEach((t: any) => {
       if (t.video_id) {
-        tasksMap[t.video_id] = (tasksMap[t.video_id] || 0) + (t.work_minutes || 0)
+        if (!tasksMap[t.video_id]) {
+          tasksMap[t.video_id] = { minutes: 0, total: 0, completed: 0 }
+        }
+        tasksMap[t.video_id].minutes += t.work_minutes || 0
+        tasksMap[t.video_id].total += 1
+        if (t.status === 'completed') {
+          tasksMap[t.video_id].completed += 1
+        }
       }
     })
   }
@@ -1993,14 +2000,17 @@ export async function getYoutubeVideos() {
   // حساب ساعات العمل والمهام لكل فيديو بناءً على حقل الخطوات والمهام المربوطة بالفيديو
   const videosWithStats = videos.map((video) => {
     const stepsList = video.steps || []
-    const totalTasks = stepsList.length
-    const completedTasks = stepsList.filter((s: any) => s.completed).length
+    const videoTasks = tasksMap[video.id] || { minutes: 0, total: 0, completed: 0 }
     
     const stepsMinutes = stepsList.reduce((sum: number, s: any) => sum + (s.work_minutes || 0), 0)
-    const tasksMinutes = tasksMap[video.id] || 0
+    const tasksMinutes = videoTasks.minutes
     const totalMinutes = stepsMinutes + tasksMinutes
     
     const totalHours = Math.round((totalMinutes / 60) * 10) / 10
+
+    const hasTasks = videoTasks.total > 0
+    const totalTasks = hasTasks ? videoTasks.total : stepsList.length
+    const completedTasks = hasTasks ? videoTasks.completed : stepsList.filter((s: any) => s.completed).length
 
     return {
       ...video,
@@ -2096,15 +2106,20 @@ export async function getYoutubeVideoDetails(videoId: string) {
   const tasksMinutes = (tasks || []).reduce((sum: number, t: any) => sum + (t.work_minutes || 0), 0)
   const totalMinutes = stepsMinutes + tasksMinutes
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10
-  const completedTasks = stepsList.filter((s: any) => s.completed).length
-  const progress = stepsList.length > 0 ? Math.round((completedTasks / stepsList.length) * 100) : 0
+
+  const hasTasks = tasks && tasks.length > 0
+  const totalTasks = hasTasks ? tasks.length : stepsList.length
+  const completedTasks = hasTasks 
+    ? tasks.filter((t: any) => t.status === 'completed').length 
+    : stepsList.filter((s: any) => s.completed).length
+  const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
   return {
     video: {
       ...video,
       steps: stepsWithTotalMinutes,
       totalHours,
-      totalTasks: stepsList.length,
+      totalTasks,
       completedTasks,
       progress
     },

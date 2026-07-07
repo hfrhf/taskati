@@ -294,9 +294,16 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
     setSteps(updatedSteps)
     
     // إعادة حساب تفاصيل الفيديو
-    const totalTasks = updatedSteps.length
-    const completedTasks = updatedSteps.filter(s => s.completed).length
-    const totalMinutes = updatedSteps.reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+    const hasTasks = tasks && tasks.length > 0
+    const totalTasks = hasTasks ? tasks.length : updatedSteps.length
+    const completedTasks = hasTasks 
+      ? tasks.filter(t => t.status === 'completed').length 
+      : updatedSteps.filter(s => s.completed).length
+
+    const stepsMinutes = updatedSteps.reduce((sum, s) => sum + (s.work_minutes || 0), 0)
+    const tasksMinutes = tasks.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+    const totalMinutes = stepsMinutes + tasksMinutes
+
     const totalHours = Math.round((totalMinutes / 60) * 10) / 10
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 

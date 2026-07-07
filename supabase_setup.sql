@@ -510,8 +510,7 @@ create policy "Allow users to manage their own videos" on public.youtube_videos
 alter table public.tasks add column if not exists work_minutes integer not null default 0;
 alter table public.tasks add column if not exists video_id uuid;
 alter table public.tasks add column if not exists video_phase text check (video_phase in ('scripting', 'recording', 'editing', 'publishing', 'other'));
-alter table public.tasks add column if not exists video_step_id text;
-
+ 
 -- إضافة قيد المفتاح الأجنبي (Foreign Key) للمهمة لربطها بالفيديو إذا لم يكن موجوداً
 do $$
 begin
