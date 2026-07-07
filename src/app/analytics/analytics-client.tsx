@@ -390,8 +390,7 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                   </p>
                 ) : (
                   data.dailyBreakdown.map((item) => {
-                    const totalMins = Math.max(item.workMinutes, item.journalMinutes)
-                    const hasLogged = totalMins > 0 || item.tasksCount > 0 || item.productivityScore > 0
+                    const hasLogged = item.workMinutes > 0 || item.journalMinutes > 0 || item.tasksCount > 0 || item.productivityScore > 0
 
                     return (
                       <div 
@@ -412,12 +411,22 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
 
                         {/* مؤشرات اليوم */}
                         <div className="flex items-center gap-3 sm:gap-6">
-                          {/* الساعات المنجزة */}
-                          {totalMins > 0 ? (
+                          {/* وقت المهام */}
+                          {item.workMinutes > 0 ? (
                             <div className="text-center">
-                              <span className="block text-[8px] font-bold text-theme-text-muted">الوقت الإجمالي</span>
-                              <span className="text-xs font-black text-theme-text font-mono">
-                                {Math.round((totalMins / 60) * 10) / 10}س
+                              <span className="block text-[8px] font-bold text-theme-text-muted">وقت المهام</span>
+                              <span className="text-xs font-black text-indigo-400 font-mono">
+                                {Math.round((item.workMinutes / 60) * 10) / 10}س
+                              </span>
+                            </div>
+                          ) : null}
+
+                          {/* وقت الجرنال */}
+                          {item.journalMinutes > 0 ? (
+                            <div className="text-center">
+                              <span className="block text-[8px] font-bold text-theme-text-muted">وقت الجرنال</span>
+                              <span className="text-xs font-black text-purple-400 font-mono">
+                                {Math.round((item.journalMinutes / 60) * 10) / 10}س
                               </span>
                             </div>
                           ) : null}
