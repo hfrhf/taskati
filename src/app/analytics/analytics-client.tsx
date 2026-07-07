@@ -461,111 +461,113 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
                 }
 
                 return (
-                  <div className="w-full" dir="rtl">
-                    {/* أيام الأسبوع */}
-                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
-                      {weekdays.map(dName => (
-                        <div key={dName} className="py-1">
-                          {dName}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* شبكة الأيام */}
-                    <div className="grid grid-cols-7 gap-2">
-                      {/* المربعات الفارغة لبداية الشهر */}
-                      {emptyCells.map((_, idx) => (
-                        <div 
-                          key={`empty-${idx}`} 
-                          className="bg-transparent border border-transparent rounded-2xl h-20 sm:h-24 md:h-28 opacity-0 pointer-events-none"
-                        />
-                      ))}
-
-                      {/* أيام الشهر الفعالة */}
-                      {daysArray.map(d => {
-                        const isFuture = year > currentYear || 
-                          (year === currentYear && month > currentMonth) || 
-                          (year === currentYear && month === currentMonth && d > currentDay)
-                          
-                        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-                        const dayItem = data.dailyBreakdown.find(item => item.date === dateStr)
-                        
-                        const hasLogged = dayItem && (
-                          dayItem.workMinutes > 0 || 
-                          dayItem.journalMinutes > 0 || 
-                          dayItem.tasksCount > 0 || 
-                          dayItem.productivityScore > 0 || 
-                          (dayItem.mood && dayItem.mood !== '')
-                        )
-                        
-                        let cellClasses = ""
-                        let contentColorClasses = ""
-                        let numberColorClass = ""
-                        
-                        if (isFuture) {
-                          cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
-                          numberColorClass = "text-theme-text-muted/40"
-                        } else if (!hasLogged) {
-                          cellClasses = "bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
-                          numberColorClass = "text-rose-500 dark:text-rose-400"
-                        } else {
-                          const mins = dayItem?.workMinutes || 0
-                          if (mins === 0) {
-                            cellClasses = "bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 hover:bg-emerald-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
-                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
-                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
-                          } else if (mins > 0 && mins < 120) {
-                            cellClasses = "bg-emerald-500/15 dark:bg-emerald-500/20 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
-                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
-                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
-                          } else if (mins >= 120 && mins < 180) {
-                            cellClasses = "bg-emerald-500/25 dark:bg-emerald-500/35 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
-                            contentColorClasses = "text-emerald-700 dark:text-emerald-300"
-                            numberColorClass = "text-emerald-700 dark:text-emerald-300"
-                          } else {
-                            // mins >= 180 (3 ساعات أو أكثر)
-                            cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
-                            contentColorClasses = "text-white"
-                            numberColorClass = "text-white"
-                          }
-                        }
-
-                        return (
-                          <div
-                            key={d}
-                            onClick={() => !isFuture && handleDayClick(dateStr, dayItem)}
-                            className={`rounded-2xl p-2 md:p-3 h-20 sm:h-24 md:h-28 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
-                          >
-                            {/* الصف العلوي: الإيموجي ورقم اليوم */}
-                            <div className="flex justify-between items-start w-full">
-                              {!isFuture && dayItem?.mood && (
-                                <span className="text-xs md:text-sm">
-                                  {moodEmojiMap[dayItem.mood] || dayItem.mood}
-                                </span>
-                              )}
-                              <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
-                                {d}
-                              </span>
-                            </div>
-                            
-                            {/* الصف السفلي: تفاصيل الساعات والمهام */}
-                            {!isFuture && dayItem && hasLogged && (
-                              <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
-                                  <span className="whitespace-nowrap">{formatWorkTimeArabic(dayItem.workMinutes)}</span>
-                                </div>
-                                {dayItem.tasksCount > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <CheckCircle2 className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
-                                    <span className="whitespace-nowrap">{formatTasksCountArabic(dayItem.tasksCount)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                  <div className="w-full overflow-x-auto pb-2 scrollbar-thin" dir="rtl">
+                    <div className="min-w-[650px] lg:min-w-0">
+                      {/* أيام الأسبوع */}
+                      <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
+                        {weekdays.map(dName => (
+                          <div key={dName} className="py-1">
+                            {dName}
                           </div>
-                        )
-                      })}
+                        ))}
+                      </div>
+
+                      {/* شبكة الأيام */}
+                      <div className="grid grid-cols-7 gap-2">
+                        {/* المربعات الفارغة لبداية الشهر */}
+                        {emptyCells.map((_, idx) => (
+                          <div 
+                            key={`empty-${idx}`} 
+                            className="bg-transparent border border-transparent rounded-2xl h-24 sm:h-28 md:h-32 opacity-0 pointer-events-none"
+                          />
+                        ))}
+
+                        {/* أيام الشهر الفعالة */}
+                        {daysArray.map(d => {
+                          const isFuture = year > currentYear || 
+                            (year === currentYear && month > currentMonth) || 
+                            (year === currentYear && month === currentMonth && d > currentDay)
+                            
+                          const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                          const dayItem = data.dailyBreakdown.find(item => item.date === dateStr)
+                          
+                          const hasLogged = dayItem && (
+                            dayItem.workMinutes > 0 || 
+                            dayItem.journalMinutes > 0 || 
+                            dayItem.tasksCount > 0 || 
+                            dayItem.productivityScore > 0 || 
+                            (dayItem.mood && dayItem.mood !== '')
+                          )
+                          
+                          let cellClasses = ""
+                          let contentColorClasses = ""
+                          let numberColorClass = ""
+                          
+                          if (isFuture) {
+                            cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
+                            numberColorClass = "text-theme-text-muted/40"
+                          } else if (!hasLogged) {
+                            cellClasses = "bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                            numberColorClass = "text-rose-500 dark:text-rose-400"
+                          } else {
+                            const mins = dayItem?.workMinutes || 0
+                            if (mins === 0) {
+                              cellClasses = "bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 hover:bg-emerald-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                              contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                              numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                            } else if (mins > 0 && mins < 120) {
+                              cellClasses = "bg-emerald-500/15 dark:bg-emerald-500/20 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                              contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                              numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                            } else if (mins >= 120 && mins < 180) {
+                              cellClasses = "bg-emerald-500/25 dark:bg-emerald-500/35 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                              contentColorClasses = "text-emerald-700 dark:text-emerald-300"
+                              numberColorClass = "text-emerald-700 dark:text-emerald-300"
+                            } else {
+                              // mins >= 180 (3 ساعات أو أكثر)
+                              cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                              contentColorClasses = "text-white"
+                              numberColorClass = "text-white"
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={d}
+                              onClick={() => !isFuture && handleDayClick(dateStr, dayItem)}
+                              className={`rounded-2xl p-2 md:p-3 h-24 sm:h-28 md:h-32 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
+                            >
+                              {/* الصف العلوي: الإيموجي ورقم اليوم */}
+                              <div className="flex justify-between items-start w-full">
+                                {!isFuture && dayItem?.mood && (
+                                  <span className="text-xs md:text-sm">
+                                    {moodEmojiMap[dayItem.mood] || dayItem.mood}
+                                  </span>
+                                )}
+                                <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
+                                  {d}
+                                </span>
+                              </div>
+                              
+                              {/* الصف السفلي: تفاصيل الساعات والمهام */}
+                              {!isFuture && dayItem && hasLogged && (
+                                <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                    <span className="whitespace-nowrap">{formatWorkTimeArabic(dayItem.workMinutes)}</span>
+                                  </div>
+                                  {dayItem.tasksCount > 0 && (
+                                    <div className="flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                      <span className="whitespace-nowrap">{formatTasksCountArabic(dayItem.tasksCount)}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 )
