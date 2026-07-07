@@ -805,7 +805,7 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
       {isTaskModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-xs" onClick={() => setIsTaskModalOpen(false)}></div>
-          <div className="relative bg-theme-panel w-full max-w-lg mx-4 rounded-3xl p-6 sm:p-8 shadow-2xl border border-theme-border animate-modal-in z-10 text-right">
+          <div className="relative bg-theme-panel w-full max-w-3xl mx-4 rounded-3xl p-6 sm:p-8 shadow-2xl border border-theme-border animate-modal-in z-10 text-right">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <h3 className="text-lg font-bold text-theme-text">إسناد مهمة جديدة</h3>
@@ -819,154 +819,166 @@ export default function DashboardClient({ currentProfile, teamProfiles, initialM
               </button>
             </div>
 
-            <form onSubmit={handleAddTask} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">عنوان المهمة</label>
-                <input 
-                  type="text" 
-                  name="title" 
-                  required 
-                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
-                  placeholder="مثال: تفعيل بوابات الدفع الإلكتروني"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الوصف والتفاصيل</label>
-                <textarea 
-                  name="description" 
-                  rows={3}
-                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none resize-none" 
-                  placeholder="اكتب الخطوات أو المتطلبات لإنجاز هذه المهمة..."
-                ></textarea>
-              </div>
-
+            <form onSubmit={handleAddTask} className="space-y-5">
               <input type="hidden" name="assigned_to" value={currentProfile.id} />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
-                  <select 
-                    name="video_id"
-                    value={selectedVideoId}
-                    onChange={(e) => {
-                      setSelectedVideoId(e.target.value)
-                      setTaskVideoStepId('')
-                    }}
-                    className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
-                  >
-                    <option value="">عمل عام / غير مرتبط بفيديو</option>
-                    {youtubeVideos.map(v => (
-                      <option key={v.id} value={v.id}>🎬 {v.title}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الموعد النهائي للتسليم</label>
-                  <DatePicker 
-                    name="due_date"
-                    value={taskDueDate}
-                    onChange={setTaskDueDate}
-                    className="bg-theme-input focus:bg-theme-panel py-3"
-                    direction="up"
-                  />
-                </div>
-              </div>
-
-              {selectedVideoId && (() => {
-                const currentVid = youtubeVideos.find(v => v.id === selectedVideoId)
-                const videoSteps = currentVid?.steps || []
-                return (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-modal-in">
-                    <div>
-                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">مرحلة إنتاج الفيديو (إذا اخترت فيديو)</label>
-                      <select 
-                        name="video_phase"
-                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
-                      >
-                        <option value="other">أخرى / عمل عام</option>
-                        <option value="scripting">✍️ السيناريو والكتابة</option>
-                        <option value="recording">🎙️ التصوير والتسجيل</option>
-                        <option value="editing">🎬 المونتاج والتحريك</option>
-                        <option value="publishing">🎨 الغلاف والنشر</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-theme-text-muted mb-1.5">خطوة الإنتاج المحددة (اختياري)</label>
-                      <select 
-                        name="video_step_id"
-                        value={taskVideoStepId}
-                        onChange={(e) => setTaskVideoStepId(e.target.value)}
-                        className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
-                      >
-                        <option value="">غير مرتبط بخطوة محددة</option>
-                        {videoSteps.map((step: any) => {
-                          const phaseLabels: Record<string, string> = {
-                            scripting: 'سيناريو',
-                            recording: 'تسجيل',
-                            editing: 'مونتاج',
-                            publishing: 'نشر',
-                            other: 'أخرى'
-                          }
-                          const phaseLabel = phaseLabels[step.phase || 'other'] || 'أخرى'
-                          return (
-                            <option key={step.id} value={step.id}>
-                              {step.title} ({phaseLabel})
-                            </option>
-                          )
-                        })}
-                      </select>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* العمود الأيمن: تفاصيل المهمة الأساسية */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">عنوان المهمة</label>
+                    <input 
+                      type="text" 
+                      name="title" 
+                      required 
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none" 
+                      placeholder="مثال: تفعيل بوابات الدفع الإلكتروني"
+                    />
                   </div>
-                )
-              })()}
 
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المحطة الكبرى المرتبطة (Milestone)</label>
-                <select 
-                  name="milestone_id"
-                  className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer"
-                >
-                  <option value="">أعمال عامة / غير مرتبطة بمحطة</option>
-                  {milestones.filter(m => m.status === 'active').map(m => (
-                    <option key={m.id} value={m.id}>🎯 {m.title}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-theme-text-muted mb-2">اختر لون بوكس المهمة للتمييز:</label>
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                  {Object.keys(colorClassMap).map((colorKey) => (
-                    <label key={colorKey} className="cursor-pointer">
-                      <input 
-                        type="radio" 
-                        name="color" 
-                        value={colorKey} 
-                        defaultChecked={colorKey === 'classic'}
-                        className="peer sr-only"
-                      />
-                      <div className="peer-checked:ring-2 peer-checked:ring-theme-accent border border-theme-border rounded-xl py-2 px-1 text-center text-[10px] font-bold bg-theme-panel text-theme-text transition-all select-none">
-                        {colorKey === 'classic' ? 'أبيض' : 
-                         colorKey === 'pastel-red' ? 'وردي' : 
-                         colorKey === 'pastel-blue' ? 'سماوي' : 
-                         colorKey === 'pastel-green' ? 'زمردي' : 
-                         colorKey === 'pastel-amber' ? 'ذهبي' : 
-                         colorKey === 'pastel-purple' ? 'بنفسجي' : 'رملي'}
-                      </div>
-                    </label>
-                  ))}
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الوصف والتفاصيل</label>
+                    <textarea 
+                      name="description" 
+                      rows={6}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none resize-none h-[calc(100%-2rem)] min-h-[120px]" 
+                      placeholder="اكتب الخطوات أو المتطلبات لإنجاز هذه المهمة..."
+                    ></textarea>
+                  </div>
                 </div>
+
+                {/* العمود الأيسر: إعدادات وخيارات المهمة */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">الموعد النهائي للتسليم</label>
+                    <DatePicker 
+                      name="due_date"
+                      value={taskDueDate}
+                      onChange={setTaskDueDate}
+                      className="bg-theme-input focus:bg-theme-panel py-3"
+                      direction="up"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">المحطة الكبرى المرتبطة (Milestone)</label>
+                    <select 
+                      name="milestone_id"
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer"
+                    >
+                      <option value="">أعمال عامة / غير مرتبطة بمحطة</option>
+                      {milestones.filter(m => m.status === 'active').map(m => (
+                        <option key={m.id} value={m.id}>🎯 {m.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-theme-text-muted mb-1.5">فيديو مرتبط بقناتك (اختياري)</label>
+                    <select 
+                      name="video_id"
+                      value={selectedVideoId}
+                      onChange={(e) => {
+                        setSelectedVideoId(e.target.value)
+                        setTaskVideoStepId('')
+                      }}
+                      className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                    >
+                      <option value="">عمل عام / غير مرتبط بفيديو</option>
+                      {youtubeVideos.map(v => (
+                        <option key={v.id} value={v.id}>🎬 {v.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedVideoId && (() => {
+                    const currentVid = youtubeVideos.find(v => v.id === selectedVideoId)
+                    const videoSteps = currentVid?.steps || []
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-modal-in">
+                        <div>
+                          <label className="block text-xs font-bold text-theme-text-muted mb-1">مرحلة إنتاج الفيديو</label>
+                          <select 
+                            name="video_phase"
+                            className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                          >
+                            <option value="other">أخرى / عمل عام</option>
+                            <option value="scripting">✍️ السيناريو والكتابة</option>
+                            <option value="recording">🎙️ التصوير والتسجيل</option>
+                            <option value="editing">🎬 المونتاج والتحريك</option>
+                            <option value="publishing">🎨 الغلاف والنشر</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-theme-text-muted mb-1">خطوة الإنتاج المحددة</label>
+                          <select 
+                            name="video_step_id"
+                            value={taskVideoStepId}
+                            onChange={(e) => setTaskVideoStepId(e.target.value)}
+                            className="w-full bg-theme-input border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-4 py-3 text-xs transition-all outline-none cursor-pointer font-semibold"
+                          >
+                            <option value="">غير مرتبط بخطوة</option>
+                            {videoSteps.map((step: any) => {
+                              const phaseLabels: Record<string, string> = {
+                                scripting: 'سيناريو',
+                                recording: 'تسجيل',
+                                editing: 'مونتاج',
+                                publishing: 'نشر',
+                                other: 'أخرى'
+                              }
+                              const phaseLabel = phaseLabels[step.phase || 'other'] || 'أخرى'
+                              return (
+                                <option key={step.id} value={step.id}>
+                                  {step.title} ({phaseLabel})
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+
               </div>
 
-              <div className="pt-2">
-                <button 
-                  type="submit" 
-                  className="w-full bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold py-3.5 rounded-xl text-xs transition-colors cursor-pointer"
-                >
-                  إسناد المهمة للمجموعة
-                </button>
+              {/* قسم اختيار الألوان والزر النهائي أسفل العمودين بكامل العرض */}
+              <div className="border-t border-theme-border pt-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-theme-text-muted mb-2">اختر لون بوكس المهمة للتمييز البصري:</label>
+                  <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                    {Object.keys(colorClassMap).map((colorKey) => (
+                      <label key={colorKey} className="cursor-pointer">
+                        <input 
+                          type="radio" 
+                          name="color" 
+                          value={colorKey} 
+                          defaultChecked={colorKey === 'classic'}
+                          className="peer sr-only"
+                        />
+                        <div className="peer-checked:ring-2 peer-checked:ring-theme-accent border border-theme-border rounded-xl py-2.5 px-1 text-center text-[10px] font-bold bg-theme-panel text-theme-text transition-all select-none hover:bg-theme-bg">
+                          {colorKey === 'classic' ? 'أبيض' : 
+                           colorKey === 'pastel-red' ? 'وردي' : 
+                           colorKey === 'pastel-blue' ? 'سماوي' : 
+                           colorKey === 'pastel-green' ? 'زمردي' : 
+                           colorKey === 'pastel-amber' ? 'ذهبي' : 
+                           colorKey === 'pastel-purple' ? 'بنفسجي' : 'رملي'}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    type="submit" 
+                    className="w-full bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold py-4 rounded-xl text-xs transition-colors cursor-pointer shadow-sm active:scale-98"
+                  >
+                    إسناد المهمة للمجموعة
+                  </button>
+                </div>
               </div>
             </form>
           </div>
