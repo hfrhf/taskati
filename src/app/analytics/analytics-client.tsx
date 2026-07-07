@@ -15,9 +15,11 @@ import {
   BookOpen,
   ArrowUpRight,
   ArrowDownRight,
-  PieChart
+  PieChart,
+  X,
+  AlertCircle
 } from 'lucide-react'
-import { getMonthlyAnalytics } from '../actions'
+import { getMonthlyAnalytics, getDailyStandups } from '../actions'
 
 interface Profile {
   id: string
@@ -101,8 +103,37 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
   // حالات المخططات البيانية التفاعلية
   const [hoveredSlice, setHoveredSlice] = useState<number | null>(null)
 
+  // حالات تفاصيل اليوم المنبثقة (Popup)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [selectedDayDate, setSelectedDayDate] = useState<string>('')
+  const [selectedDayDetails, setSelectedDayDetails] = useState<any>(null)
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false)
+  const [selectedDayTasksCount, setSelectedDayTasksCount] = useState<number>(0)
+  const [selectedDayWorkMinutes, setSelectedDayWorkMinutes] = useState<number>(0)
+
   const showToast = (message: string, type: 'success' | 'warning' | 'error' = 'success') => {
     setToast({ message, type })
+  }
+
+  const handleDayClick = async (dateStr: string, dayItem: any) => {
+    setSelectedDayDate(dateStr)
+    setSelectedDayTasksCount(dayItem?.tasksCount || 0)
+    setSelectedDayWorkMinutes(dayItem?.workMinutes || 0)
+    setIsModalOpen(true)
+    setIsLoadingDetails(true)
+    setSelectedDayDetails(null)
+    try {
+      const standups = await getDailyStandups(dateStr)
+      // البحث عن تقرير المستخدم الحالي لتلك اليومية
+      const userStandup = (standups as any[]).find(s => s.user_id === currentProfile.id)
+      if (userStandup) {
+        setSelectedDayDetails(userStandup)
+      }
+    } catch (err: any) {
+      showToast('فشل جلب تفاصيل اللقاء اليومي: ' + err.message, 'error')
+    } finally {
+      setIsLoadingDetails(false)
+    }
   }
 
   const handleFetchData = async (selectedMonth: number, selectedYear: number) => {
@@ -376,97 +407,357 @@ export default function AnalyticsClient({ currentProfile, initialData, initialMo
               </div>
             </div>
 
-            {/* الجزء الأيسر: النشاط اليومي التفصيلي */}
-            <div className="lg:col-span-7 space-y-4 text-right">
-              <div className="flex items-center gap-1.5 border-b border-theme-border pb-3">
-                <span className="w-2.5 h-2.5 rounded-full bg-theme-accent"></span>
-                <h2 className="text-sm font-black text-theme-text">سجل النشاط اليومي التفصيلي</h2>
+            {/* الجزء الأيسر: النشاط اليومي التفصيلي (تقويم تفاعلي) */}
+            <div className="lg:col-span-7 bg-theme-panel rounded-3xl p-6 border border-theme-border shadow-sm text-right space-y-6">
+              {/* ترويسة التقويم ومفتاح الألوان */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-theme-border pb-4 w-full" dir="rtl">
+                <div>
+                  <h2 className="text-sm font-black text-theme-text">
+                    تقويم نشاط الشهر للإنتاجية
+                  </h2>
+                  <p className="text-[10px] text-theme-text-muted mt-0.5">(انقر على أي يوم لعرض تفاصيله)</p>
+                </div>
+                
+                <div className="flex items-center gap-3 text-[10px] font-bold">
+                  <div className="flex items-center gap-1 text-theme-text-muted">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                    <span>ساعات العمل</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-theme-text-muted">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span>المهام المنتجزة</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {data.dailyBreakdown.length === 0 ? (
-                  <p className="text-xs text-theme-text-muted text-center py-10 bg-theme-panel rounded-2xl border border-dashed border-theme-border">
-                    لا توجد بيانات مسجلة لهذا الشهر.
-                  </p>
-                ) : (
-                  data.dailyBreakdown.map((item) => {
-                    const hasLogged = item.workMinutes > 0 || item.journalMinutes > 0 || item.tasksCount > 0 || item.productivityScore > 0
+              {/* حسابات شبكة التقويم */}
+              {(() => {
+                const daysInMonth = new Date(year, month, 0).getDate()
+                const firstDayIndex = new Date(year, month - 1, 1).getDay() // 0 = الأحد، ..., 6 = السبت
+                const emptyCells = Array.from({ length: firstDayIndex })
+                const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+                
+                const today = new Date()
+                const currentYear = today.getFullYear()
+                const currentMonth = today.getMonth() + 1
+                const currentDay = today.getDate()
 
-                    return (
-                      <div 
-                        key={item.date}
-                        className={`bg-theme-panel border rounded-2xl p-4 flex items-center justify-between gap-4 shadow-xs transition-colors ${
-                          hasLogged ? 'border-theme-border hover:border-theme-border/80' : 'border-theme-border/40 opacity-55'
-                        }`}
-                      >
-                        {/* التاريخ والحالة المزاجية */}
-                        <div className="space-y-1">
-                          <span className="text-[11px] font-black text-theme-text font-mono">{item.date}</span>
-                          {item.mood && (
-                            <span className="block text-[9px] font-bold text-indigo-400 bg-indigo-500/5 px-2 py-0.5 rounded-md border border-indigo-500/10 w-fit">
-                              {moodMap[item.mood] || item.mood}
-                            </span>
-                          )}
+                const weekdays = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
+                
+                const formatWorkTimeArabic = (minutes: number) => {
+                  if (!minutes) return 'لا يوجد'
+                  const hours = Math.floor(minutes / 60)
+                  const mins = minutes % 60
+                  if (hours === 0) return `${mins} دقيقة`
+                  if (hours === 1 && mins === 0) return 'ساعة'
+                  if (hours === 1 && mins > 0) return `ساعة و ${mins} دقيقة`
+                  if (hours === 2 && mins === 0) return 'ساعتين'
+                  if (hours === 2 && mins > 0) return `ساعتين و ${mins} دقيقة`
+                  if (hours >= 3 && hours <= 10 && mins === 0) return `${hours} ساعات`
+                  if (hours > 10 && mins === 0) return `${hours} ساعة`
+                  return `${hours}س و ${mins}د`
+                }
+
+                const formatTasksCountArabic = (count: number) => {
+                  if (count === 1) return 'مهمة واحدة'
+                  if (count === 2) return '2 مهام'
+                  if (count >= 3 && count <= 10) return `${count} مهام`
+                  return `${count} مهمة`
+                }
+
+                const moodEmojiMap: Record<string, string> = {
+                  energetic: '⚡',
+                  stable: '😊',
+                  tired: '😫',
+                  stressed: '🤯'
+                }
+
+                return (
+                  <div className="w-full" dir="rtl">
+                    {/* أيام الأسبوع */}
+                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
+                      {weekdays.map(dName => (
+                        <div key={dName} className="py-1">
+                          {dName}
                         </div>
+                      ))}
+                    </div>
 
-                        {/* مؤشرات اليوم */}
-                        <div className="flex items-center gap-3 sm:gap-6">
-                          {/* وقت المهام */}
-                          {item.workMinutes > 0 ? (
-                            <div className="text-center">
-                              <span className="block text-[8px] font-bold text-theme-text-muted">وقت المهام</span>
-                              <span className="text-xs font-black text-indigo-400 font-mono">
-                                {Math.round((item.workMinutes / 60) * 10) / 10}س
+                    {/* شبكة الأيام */}
+                    <div className="grid grid-cols-7 gap-2">
+                      {/* المربعات الفارغة لبداية الشهر */}
+                      {emptyCells.map((_, idx) => (
+                        <div 
+                          key={`empty-${idx}`} 
+                          className="bg-transparent border border-transparent rounded-2xl h-20 sm:h-24 md:h-28 opacity-0 pointer-events-none"
+                        />
+                      ))}
+
+                      {/* أيام الشهر الفعالة */}
+                      {daysArray.map(d => {
+                        const isFuture = year > currentYear || 
+                          (year === currentYear && month > currentMonth) || 
+                          (year === currentYear && month === currentMonth && d > currentDay)
+                          
+                        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                        const dayItem = data.dailyBreakdown.find(item => item.date === dateStr)
+                        
+                        const hasLogged = dayItem && (
+                          dayItem.workMinutes > 0 || 
+                          dayItem.journalMinutes > 0 || 
+                          dayItem.tasksCount > 0 || 
+                          dayItem.productivityScore > 0 || 
+                          (dayItem.mood && dayItem.mood !== '')
+                        )
+                        
+                        let cellClasses = ""
+                        let contentColorClasses = ""
+                        let numberColorClass = ""
+                        
+                        if (isFuture) {
+                          cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
+                          numberColorClass = "text-theme-text-muted/40"
+                        } else if (!hasLogged) {
+                          cellClasses = "bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                          numberColorClass = "text-rose-500 dark:text-rose-400"
+                        } else {
+                          const mins = dayItem?.workMinutes || 0
+                          if (mins === 0) {
+                            cellClasses = "bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 hover:bg-emerald-500/10 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                          } else if (mins > 0 && mins < 120) {
+                            cellClasses = "bg-emerald-500/15 dark:bg-emerald-500/20 border border-emerald-500/25 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                          } else if (mins >= 120 && mins < 180) {
+                            cellClasses = "bg-emerald-500/25 dark:bg-emerald-500/35 border border-emerald-500/40 hover:bg-emerald-500/30 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                            contentColorClasses = "text-emerald-700 dark:text-emerald-300"
+                            numberColorClass = "text-emerald-700 dark:text-emerald-300"
+                          } else {
+                            // mins >= 180 (3 ساعات أو أكثر)
+                            cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                            contentColorClasses = "text-white"
+                            numberColorClass = "text-white"
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={d}
+                            onClick={() => !isFuture && handleDayClick(dateStr, dayItem)}
+                            className={`rounded-2xl p-2 md:p-3 h-20 sm:h-24 md:h-28 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
+                          >
+                            {/* الصف العلوي: الإيموجي ورقم اليوم */}
+                            <div className="flex justify-between items-start w-full">
+                              {!isFuture && dayItem?.mood && (
+                                <span className="text-xs md:text-sm">
+                                  {moodEmojiMap[dayItem.mood] || dayItem.mood}
+                                </span>
+                              )}
+                              <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
+                                {d}
                               </span>
                             </div>
-                          ) : null}
-
-                          {/* وقت الجرنال */}
-                          {item.journalMinutes > 0 ? (
-                            <div className="text-center">
-                              <span className="block text-[8px] font-bold text-theme-text-muted">وقت الجرنال</span>
-                              <span className="text-xs font-black text-purple-400 font-mono">
-                                {Math.round((item.journalMinutes / 60) * 10) / 10}س
-                              </span>
-                            </div>
-                          ) : null}
-
-                          {/* المهام المكتملة */}
-                          {item.tasksCount > 0 ? (
-                            <div className="text-center">
-                              <span className="block text-[8px] font-bold text-theme-text-muted">المهام المنجزة</span>
-                              <span className="text-xs font-black text-emerald-400 font-mono">
-                                {item.tasksCount} مهمة
-                              </span>
-                            </div>
-                          ) : null}
-
-                          {/* الإنتاجية */}
-                          {item.productivityScore > 0 ? (
-                            <div className="flex flex-col items-center">
-                              <span className="block text-[8px] font-bold text-theme-text-muted">تقييم اليوم</span>
-                              <div className="flex items-center gap-0.5 text-amber-500">
-                                <span className="text-xs font-black font-mono">{item.productivityScore}</span>
-                                <Star className="w-3.5 h-3.5 fill-amber-500" />
+                            
+                            {/* الصف السفلي: تفاصيل الساعات والمهام */}
+                            {!isFuture && dayItem && hasLogged && (
+                              <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                  <span className="whitespace-nowrap">{formatWorkTimeArabic(dayItem.workMinutes)}</span>
+                                </div>
+                                {dayItem.tasksCount > 0 && (
+                                  <div className="flex items-center gap-1">
+                                    <CheckCircle2 className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                    <span className="whitespace-nowrap">{formatTasksCountArabic(dayItem.tasksCount)}</span>
+                                  </div>
+                                )}
                               </div>
-                            </div>
-                          ) : (
-                            !hasLogged && (
-                              <span className="text-[10px] text-theme-text-muted font-bold">لا يوجد نشاط</span>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
           </div>
 
         </div>
       </main>
+
+      {/* نافذة التفاصيل المنبثقة (Modal) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 transition-opacity duration-200">
+          <div 
+            className="bg-theme-panel border border-theme-border rounded-3xl w-full max-w-lg shadow-xl relative overflow-hidden animate-modal-in flex flex-col max-h-[90vh] text-right"
+            dir="rtl"
+          >
+            {/* خط جمالي علوي */}
+            <div className="h-1.5 w-full bg-gradient-to-l from-theme-accent to-indigo-500 shrink-0"></div>
+
+            {/* ترويسة المودال */}
+            <div className="flex items-center justify-between p-5 border-b border-theme-border shrink-0">
+              <div>
+                <h3 className="text-base font-black text-theme-text">
+                  تفاصيل يوم {selectedDayDate}
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">تفاصيل الإنتاجية والجرنال اليومي</p>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-theme-bg text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* محتوى المودال */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-grow scrollbar-hide">
+              {isLoadingDetails ? (
+                <div className="flex flex-col items-center justify-center py-12 text-theme-text-muted">
+                  <Loader2 className="w-8 h-8 animate-spin text-theme-accent mb-2" />
+                  <span className="text-xs">جاري تحميل التفاصيل...</span>
+                </div>
+              ) : selectedDayDetails ? (
+                /* يومية مسجلة بالفعل */
+                <div className="space-y-6">
+                  {/* النجوم والمؤشرات السريعة */}
+                  <div className="flex flex-wrap gap-2 items-center justify-between bg-theme-bg/30 border border-theme-border/40 rounded-2xl p-4">
+                    <div className="flex items-center gap-0.5 text-amber-500">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-4 h-4 ${
+                            i < selectedDayDetails.productivity_score 
+                              ? 'fill-amber-500 text-amber-500' 
+                              : 'text-theme-text-muted opacity-30'
+                          }`}
+                        />
+                      ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                      {selectedDayWorkMinutes > 0 && (
+                        <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                          ⏱️ {Math.floor(selectedDayWorkMinutes / 60)}س {selectedDayWorkMinutes % 60}د
+                        </span>
+                      )}
+                      {selectedDayTasksCount > 0 && (
+                        <span className="text-[10px] font-black px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          ✅ {selectedDayTasksCount === 1 ? 'مهمة واحدة' : selectedDayTasksCount === 2 ? '2 مهام' : `${selectedDayTasksCount} مهام`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* شارات الحالة */}
+                  <div className="flex flex-wrap gap-2">
+                    {selectedDayDetails.mood && (
+                      <span className="text-[10px] font-bold px-3 py-1.5 rounded-xl border bg-indigo-500/5 text-indigo-400 border-indigo-500/20">
+                        المزاج: {selectedDayDetails.mood === 'energetic' ? 'طاقة عالية 🚀' : selectedDayDetails.mood === 'stable' ? 'مستقر 😊' : selectedDayDetails.mood === 'tired' ? 'متعب 🥱' : 'مضغوط 🤯'}
+                      </span>
+                    )}
+                    {selectedDayDetails.progress_rate && (
+                      <span className="text-[10px] font-bold px-3 py-1.5 rounded-xl border bg-emerald-500/5 text-emerald-400 border-emerald-500/20">
+                        الوتيرة: {selectedDayDetails.progress_rate === 'all' ? 'أنجزت كل المخطط 💯' : selectedDayDetails.progress_rate === 'most' ? 'أنجزت معظم المخطط 🔄' : selectedDayDetails.progress_rate === 'half' ? 'أنجزت نصف المخطط ⏳' : 'واجهت صعوبات ⚠️'}
+                      </span>
+                    )}
+                    {selectedDayDetails.milestone && (
+                      <span className="text-[10px] font-bold px-3 py-1.5 rounded-xl bg-theme-accent/10 text-theme-accent border border-theme-accent/20">
+                        🎯 المحطة: {selectedDayDetails.milestone.title}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* الإنجاز اليومي */}
+                  <div className="bg-theme-bg/30 border border-theme-border/40 rounded-2xl p-4 space-y-2">
+                    <h4 className="text-xs font-black text-theme-accent">✍️ ماذا أنجزت اليوم؟</h4>
+                    <p className="text-xs text-theme-text leading-relaxed whitespace-pre-line font-medium">
+                      {selectedDayDetails.today_tasks}
+                    </p>
+                  </div>
+
+                  {/* خطة الغد */}
+                  <div className="bg-theme-bg/30 border border-theme-border/40 rounded-2xl p-4 space-y-2">
+                    <h4 className="text-xs font-black text-theme-accent-hover">🎯 خطة الغد والخطوات القادمة</h4>
+                    <p className="text-xs text-theme-text leading-relaxed whitespace-pre-line font-medium">
+                      {selectedDayDetails.tomorrow_tasks}
+                    </p>
+                  </div>
+
+                  {/* العقبات والملاحظات */}
+                  {selectedDayDetails.blockers?.trim() && (
+                    <div className="bg-rose-500/[0.03] border border-rose-500/20 rounded-2xl p-4 space-y-2">
+                      <h4 className="text-xs font-black text-rose-500">⚠️ عقبات وملاحظات</h4>
+                      <p className="text-xs text-rose-600 dark:text-rose-450 leading-relaxed whitespace-pre-line font-medium">
+                        {selectedDayDetails.blockers}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* لا توجد يومية مسجلة */
+                <div className="space-y-4 py-4 text-center">
+                  <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-theme-text">لم تقم بتسجيل يومياتك لهذا اليوم</h4>
+                    <p className="text-xs text-theme-text-muted leading-relaxed">
+                      الجرنال اليومي يساعدك على تتبع وتوثيق إنجازاتك المزاجية والإنتاجية.
+                    </p>
+                  </div>
+
+                  {/* عرض النشاط التلقائي من المهام */}
+                  {(selectedDayWorkMinutes > 0 || selectedDayTasksCount > 0) && (
+                    <div className="bg-theme-bg/30 border border-theme-border/40 rounded-2xl p-4 text-right space-y-2 max-w-sm mx-auto">
+                      <h5 className="text-[10px] font-bold text-theme-text-muted">النشاط المسجل تلقائياً من المهام:</h5>
+                      <div className="flex flex-col gap-1 text-xs">
+                        {selectedDayWorkMinutes > 0 && (
+                          <div className="flex items-center gap-1.5 text-theme-text">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                            <span>وقت العمل: <strong>{Math.floor(selectedDayWorkMinutes / 60)}س {selectedDayWorkMinutes % 60}د</strong></span>
+                          </div>
+                        )}
+                        {selectedDayTasksCount > 0 && (
+                          <div className="flex items-center gap-1.5 text-theme-text">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>المهام المنجزة: <strong>{selectedDayTasksCount === 1 ? 'مهمة واحدة' : selectedDayTasksCount === 2 ? '2 مهام' : `${selectedDayTasksCount} مهام`}</strong></span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      window.location.href = `/standup?date=${selectedDayDate}`
+                    }}
+                    className="w-full bg-theme-accent hover:bg-theme-accent-hover text-theme-panel font-bold py-3.5 rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm active:scale-98 mt-2"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    <span>كتابة الجرنال اليومي الآن</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* كعب المودال */}
+            <div className="p-4 border-t border-theme-border bg-theme-bg/25 flex justify-end shrink-0">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 bg-theme-panel hover:bg-theme-bg text-theme-text border border-theme-border font-bold rounded-xl text-xs transition-all cursor-pointer active:scale-95"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* توست التنبيهات */}
       {toast && (
