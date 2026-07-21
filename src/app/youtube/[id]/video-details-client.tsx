@@ -21,7 +21,8 @@ import {
   Check,
   Play,
   Square,
-  Settings
+  Settings,
+  Calendar
 } from 'lucide-react'
 import { 
   updateYoutubeVideo, 
@@ -89,6 +90,8 @@ interface VideoTask {
   status: string
   work_minutes: number
   video_phase: string
+  completed_date?: string
+  due_date?: string
   group?: {
     id: string
     name: string
@@ -171,6 +174,13 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
   const [isGeneratingScript, setIsGeneratingScript] = useState(false)
   const [isGeneratingStoryboard, setIsGeneratingStoryboard] = useState(false)
   const [isGeneratingSEO, setIsGeneratingSEO] = useState(false)
+
+  // ================== حالات تقويم نشاط الفيديو المخصص ==================
+  const [calMonth, setCalMonth] = useState(() => new Date().getMonth() + 1)
+  const [calYear, setCalYear] = useState(() => new Date().getFullYear())
+  const [selectedCalDate, setSelectedCalDate] = useState<string>('')
+  const [selectedDayTasks, setSelectedDayTasks] = useState<VideoTask[]>([])
+  const [isCalModalOpen, setIsCalModalOpen] = useState(false)
 
   // جلب السكربتات المرجعية من المخزن
   useEffect(() => {
@@ -830,6 +840,194 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
             </div>
           </div>
 
+          {/* ================== تقويم نشاط عمل الفيديو ================== */}
+          <div className="bg-theme-panel border border-theme-border rounded-3xl p-6 sm:p-8 shadow-sm text-right space-y-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-theme-border pb-4 w-full" dir="rtl">
+              <div>
+                <h3 className="text-sm font-black text-theme-text flex items-center gap-1.5">
+                  <Calendar className="w-4.5 h-4.5 text-theme-accent" />
+                  <span>تقويم نشاط أيام العمل على الفيديو</span>
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">(يعرض الأيام التي تم فيها إنجاز مهام خاصة بهذا الفيديو، انقر لعرض التفاصيل)</p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <select
+                    value={calMonth}
+                    onChange={(e) => setCalMonth(parseInt(e.target.value))}
+                    className="bg-theme-panel border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-2.5 py-1.5 text-[10px] md:text-xs transition-all outline-none cursor-pointer font-bold"
+                  >
+                    {[
+                      { value: 1, label: 'يناير' },
+                      { value: 2, label: 'فبراير' },
+                      { value: 3, label: 'مارس' },
+                      { value: 4, label: 'أبريل' },
+                      { value: 5, label: 'مايو' },
+                      { value: 6, label: 'يونيو' },
+                      { value: 7, label: 'يوليو' },
+                      { value: 8, label: 'أغسطس' },
+                      { value: 9, label: 'سبتمبر' },
+                      { value: 10, label: 'أكتوبر' },
+                      { value: 11, label: 'نوفمبر' },
+                      { value: 12, label: 'ديسمبر' }
+                    ].map(m => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={calYear}
+                    onChange={(e) => setCalYear(parseInt(e.target.value))}
+                    className="bg-theme-panel border border-theme-border focus:border-theme-accent focus:bg-theme-panel text-theme-text rounded-xl px-2.5 py-1.5 text-[10px] md:text-xs transition-all outline-none cursor-pointer font-bold"
+                  >
+                    {[2025, 2026, 2027].map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* شبكة التقويم */}
+            {(() => {
+              const daysInMonth = new Date(calYear, calMonth, 0).getDate()
+              const firstDayIndex = new Date(calYear, calMonth - 1, 1).getDay() // 0 = الأحد، ..., 6 = السبت
+              const emptyCells = Array.from({ length: firstDayIndex })
+              const daysArray = Array.from({ length: daysInMonth }, (_, i) => i + 1)
+              
+              const today = new Date()
+              const currentYear = today.getFullYear()
+              const currentMonth = today.getMonth() + 1
+              const currentDay = today.getDate()
+
+              const weekdays = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
+              
+              // فلترة المهام المرتبطة بالفيديو والمكتملة في هذا الشهر والسنة
+              const videoTasksThisMonth = tasks.filter(t => {
+                if (t.status !== 'completed' || !t.completed_date) return false
+                const [y, m] = t.completed_date.split('-').map(Number)
+                return y === calYear && m === calMonth
+              })
+
+              const handleDayClickLocal = (dayNumber: number) => {
+                const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`
+                const dayTasks = videoTasksThisMonth.filter(t => t.completed_date === dateStr)
+                if (dayTasks.length > 0) {
+                  setSelectedCalDate(dateStr)
+                  setSelectedDayTasks(dayTasks)
+                  setIsCalModalOpen(true)
+                }
+              }
+
+              const formatWorkTimeArabic = (minutes: number) => {
+                if (!minutes) return 'لا يوجد'
+                const hours = Math.floor(minutes / 60)
+                const mins = minutes % 60
+                if (hours === 0) return `${mins} دقيقة`
+                if (hours === 1 && mins === 0) return 'ساعة'
+                if (hours === 1 && mins > 0) return `ساعة و ${mins} دقيقة`
+                if (hours === 2 && mins === 0) return 'ساعتين'
+                if (hours === 2 && mins > 0) return `ساعتين و ${mins} دقيقة`
+                if (hours >= 3 && hours <= 10 && mins === 0) return `${hours} ساعات`
+                if (hours > 10 && mins === 0) return `${hours} ساعة`
+                return `${hours}س و ${mins}د`
+              }
+
+              return (
+                <div className="w-full overflow-x-auto pb-2 scrollbar-thin" dir="rtl">
+                  <div className="min-w-[650px] lg:min-w-0">
+                    {/* أيام الأسبوع */}
+                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
+                      {weekdays.map(dName => (
+                        <div key={dName} className="py-1">
+                          {dName}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* شبكة الأيام */}
+                    <div className="grid grid-cols-7 gap-2">
+                      {emptyCells.map((_, idx) => (
+                        <div 
+                          key={`empty-${idx}`} 
+                          className="bg-transparent border border-transparent rounded-2xl h-24 sm:h-28 md:h-32 opacity-0 pointer-events-none"
+                        />
+                      ))}
+
+                      {daysArray.map(d => {
+                        const isFuture = calYear > currentYear || 
+                          (calYear === currentYear && calMonth > currentMonth) || 
+                          (calYear === currentYear && calMonth === currentMonth && d > currentDay)
+                          
+                        const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                        const dayTasks = videoTasksThisMonth.filter(t => t.completed_date === dateStr)
+                        const totalDayMinutes = dayTasks.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+                        
+                        const hasLogged = dayTasks.length > 0
+                        
+                        let cellClasses = ""
+                        let contentColorClasses = ""
+                        let numberColorClass = ""
+                        
+                        if (isFuture) {
+                          cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
+                          numberColorClass = "text-theme-text-muted/40"
+                        } else if (!hasLogged) {
+                          cellClasses = "bg-theme-panel/40 border border-theme-border/50 opacity-60 cursor-default"
+                          numberColorClass = "text-theme-text-muted/60"
+                        } else {
+                          // تدرج اللون الأخضر بناءً على وقت العمل على هذا الفيديو في هذا اليوم
+                          if (totalDayMinutes < 60) {
+                            cellClasses = "bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                          } else if (totalDayMinutes >= 60 && totalDayMinutes < 180) {
+                            cellClasses = "bg-emerald-500/20 dark:bg-emerald-500/30 border border-emerald-500/35 hover:bg-emerald-500/40 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                            contentColorClasses = "text-emerald-700 dark:text-emerald-300"
+                            numberColorClass = "text-emerald-700 dark:text-emerald-300"
+                          } else {
+                            cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                            contentColorClasses = "text-white"
+                            numberColorClass = "text-white"
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={d}
+                            onClick={() => !isFuture && hasLogged && handleDayClickLocal(d)}
+                            className={`rounded-2xl p-2 md:p-3 h-24 sm:h-28 md:h-32 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
+                          >
+                            <div className="flex justify-between items-start w-full">
+                              {hasLogged && (
+                                <span className="text-[10px] font-black bg-theme-panel/30 text-theme-text px-1.5 py-0.5 rounded-md">
+                                  {dayTasks.length} {dayTasks.length === 1 ? 'مهمة' : 'مهام'}
+                                </span>
+                              )}
+                              <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
+                                {d}
+                              </span>
+                            </div>
+                            
+                            {hasLogged && (
+                              <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                  <span className="whitespace-nowrap">{formatWorkTimeArabic(totalDayMinutes)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+
           {/* المهام المرتبطة بالفيديو */}
           <div className="space-y-4">
             <h3 className="text-sm font-black text-theme-text text-right flex items-center gap-1.5">
@@ -1461,6 +1659,91 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================== مودال تفاصيل العمل اليومي للفيديو ================== */}
+      {isCalModalOpen && selectedCalDate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => { setIsCalModalOpen(false); setSelectedCalDate(''); }}></div>
+          
+          <div className="relative bg-theme-panel w-full max-w-lg rounded-3xl p-6 sm:p-8 shadow-2xl border border-theme-border animate-modal-in z-10 text-right flex flex-col max-h-[85vh]">
+            <div className="flex items-start justify-between gap-4 border-b border-theme-border pb-4 shrink-0 font-sans">
+              <div>
+                <h3 className="text-base font-black text-theme-text flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-400" />
+                  <span>تفاصيل إنجاز الفيديو ليوم {selectedCalDate}</span>
+                </h3>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">المهام المكتملة وساعات العمل المسجلة لهذا الفيديو</p>
+              </div>
+              <button 
+                onClick={() => { setIsCalModalOpen(false); setSelectedCalDate(''); }}
+                className="p-1 text-theme-text-muted hover:text-theme-text rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-1 overflow-y-auto space-y-3 mt-4 flex-grow scrollbar-hide font-sans">
+              {selectedDayTasks.map((task) => (
+                <Link
+                  key={task.id}
+                  href={`/task/${task.id}`}
+                  className="block bg-theme-bg/60 border border-theme-border hover:border-theme-accent/25 rounded-2xl p-4 transition-all duration-150 text-right"
+                  onClick={() => setIsCalModalOpen(false)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-theme-text truncate">{task.title}</span>
+                        {task.group && (
+                          <span 
+                            className="text-[8px] font-bold px-1.5 py-0.5 rounded-md border"
+                            style={{ 
+                              borderColor: task.group.color === 'pastel-purple' ? '#c084fc' : task.group.color === 'pastel-blue' ? '#38bdf8' : 'var(--theme-border)',
+                              color: task.group.color === 'pastel-purple' ? '#c084fc' : task.group.color === 'pastel-blue' ? '#38bdf8' : 'currentColor'
+                            }}
+                          >
+                            {task.group.name}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-[9px] font-bold text-theme-text-muted">
+                        <span>المرحلة:</span>
+                        <span className="text-rose-450">
+                          {task.video_phase === 'scripting' ? '✍️ سيناريو' : 
+                           task.video_phase === 'recording' ? '🎙️ تصوير' : 
+                           task.video_phase === 'editing' ? '🎬 مونتاج' : 
+                           task.video_phase === 'publishing' ? '🎨 غلاف ونشر' : 'أخرى'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {task.work_minutes > 0 && (
+                        <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md font-bold text-[9px] font-mono">
+                          ⏱️ {Math.floor(task.work_minutes / 60)}س {task.work_minutes % 60}د
+                        </span>
+                      )}
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-450 border border-emerald-500/20">
+                        مكتمل
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-theme-border bg-theme-bg/25 flex justify-end shrink-0 mt-4 rounded-b-3xl font-sans">
+              <button
+                onClick={() => { setIsCalModalOpen(false); setSelectedCalDate(''); }}
+                className="px-4 py-2 bg-theme-panel hover:bg-theme-bg text-theme-text border border-theme-border font-bold rounded-xl text-xs transition-all cursor-pointer active:scale-95"
+              >
+                إغلاق
+              </button>
+            </div>
           </div>
         </div>
       )}
