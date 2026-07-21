@@ -957,26 +957,37 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
               return (
                 <div className="space-y-6">
                   {/* شريط الإحصائيات السريعة لأيام عمل الفيديو */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
-                      <span className="block text-[9px] font-bold text-theme-text-muted">أيام العمل (هذا الشهر)</span>
-                      <h4 className="text-sm sm:text-base font-black text-emerald-500 font-mono">
-                        {formatDaysArabic(daysWorkedThisMonth)}
-                      </h4>
-                    </div>
-
-                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
-                      <span className="block text-[9px] font-bold text-theme-text-muted">إجمالي أيام العمل الكلية</span>
-                      <h4 className="text-sm sm:text-base font-black text-indigo-400 font-mono">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-theme-accent/10 border border-theme-accent/20 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-black text-theme-accent">إجمالي أيام العمل الكلية لصنع الفيديو</span>
+                      <h4 className="text-sm sm:text-lg font-black text-theme-accent font-mono">
                         {formatDaysArabic(totalDaysAllTime)}
                       </h4>
+                      <p className="text-[8px] text-theme-text-muted">الأيام الفعلية التي أنجزت فيها مهام لهذا الفيديو</p>
                     </div>
 
-                    <div className="col-span-2 sm:col-span-1 bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
-                      <span className="block text-[9px] font-bold text-theme-text-muted">ساعات عمل الفيديو (هذا الشهر)</span>
-                      <h4 className="text-sm sm:text-base font-black text-amber-500 font-mono">
-                        {hoursThisMonth} ساعة
+                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">إجمالي ساعات العمل الكلية</span>
+                      <h4 className="text-sm sm:text-lg font-black text-indigo-400 font-mono">
+                        {video.totalHours} ساعة
                       </h4>
+                      <p className="text-[8px] text-theme-text-muted">من أصل المستهدف ({video.target_hours}س)</p>
+                    </div>
+
+                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">معدل العمل في اليوم الواحد</span>
+                      <h4 className="text-sm sm:text-lg font-black text-amber-500 font-mono">
+                        {totalDaysAllTime > 0 ? (video.totalHours / totalDaysAllTime).toFixed(1) : 0}س / يوم
+                      </h4>
+                      <p className="text-[8px] text-theme-text-muted">متوسط الساعات لكل يوم عمل</p>
+                    </div>
+
+                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">أيام العمل في الشهر المختار</span>
+                      <h4 className="text-sm sm:text-lg font-black text-emerald-500 font-mono">
+                        {formatDaysArabic(daysWorkedThisMonth)}
+                      </h4>
+                      <p className="text-[8px] text-theme-text-muted">في شهر {calMonth}/{calYear}</p>
                     </div>
                   </div>
 
