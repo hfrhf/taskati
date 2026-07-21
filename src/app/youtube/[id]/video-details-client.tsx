@@ -889,8 +889,15 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
               </div>
             </div>
 
-            {/* شبكة التقويم */}
+            {/* شبكة التقويم والإحصائيات السريعة */}
             {(() => {
+              // حساب إجمالي أيام العمل الكلية على هذا الفيديو (جميع الأوقات)
+              const totalDaysAllTime = new Set(
+                tasks
+                  .filter(t => t.status === 'completed' && t.completed_date)
+                  .map(t => t.completed_date)
+              ).size
+
               const daysInMonth = new Date(calYear, calMonth, 0).getDate()
               const firstDayIndex = new Date(calYear, calMonth - 1, 1).getDay() // 0 = الأحد، ..., 6 = السبت
               const emptyCells = Array.from({ length: firstDayIndex })
@@ -909,6 +916,19 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
                 const [y, m] = t.completed_date.split('-').map(Number)
                 return y === calYear && m === calMonth
               })
+
+              // عدد أيام العمل في هذا الشهر بالتحديد
+              const daysWorkedThisMonth = new Set(videoTasksThisMonth.map(t => t.completed_date)).size
+              const totalMinsThisMonth = videoTasksThisMonth.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+              const hoursThisMonth = Math.round((totalMinsThisMonth / 60) * 10) / 10
+
+              const formatDaysArabic = (count: number) => {
+                if (count === 0) return '0 يوم'
+                if (count === 1) return 'يوم واحد'
+                if (count === 2) return 'يومان'
+                if (count >= 3 && count <= 10) return `${count} أيام`
+                return `${count} يوماً`
+              }
 
               const handleDayClickLocal = (dayNumber: number) => {
                 const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`
@@ -935,92 +955,118 @@ export default function VideoDetailsClient({ currentProfile, video: initialVideo
               }
 
               return (
-                <div className="w-full overflow-x-auto pb-2 scrollbar-thin" dir="rtl">
-                  <div className="min-w-[650px] lg:min-w-0">
-                    {/* أيام الأسبوع */}
-                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
-                      {weekdays.map(dName => (
-                        <div key={dName} className="py-1">
-                          {dName}
-                        </div>
-                      ))}
+                <div className="space-y-6">
+                  {/* شريط الإحصائيات السريعة لأيام عمل الفيديو */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">أيام العمل (هذا الشهر)</span>
+                      <h4 className="text-sm sm:text-base font-black text-emerald-500 font-mono">
+                        {formatDaysArabic(daysWorkedThisMonth)}
+                      </h4>
                     </div>
 
-                    {/* شبكة الأيام */}
-                    <div className="grid grid-cols-7 gap-2">
-                      {emptyCells.map((_, idx) => (
-                        <div 
-                          key={`empty-${idx}`} 
-                          className="bg-transparent border border-transparent rounded-2xl h-24 sm:h-28 md:h-32 opacity-0 pointer-events-none"
-                        />
-                      ))}
+                    <div className="bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">إجمالي أيام العمل الكلية</span>
+                      <h4 className="text-sm sm:text-base font-black text-indigo-400 font-mono">
+                        {formatDaysArabic(totalDaysAllTime)}
+                      </h4>
+                    </div>
 
-                      {daysArray.map(d => {
-                        const isFuture = calYear > currentYear || 
-                          (calYear === currentYear && calMonth > currentMonth) || 
-                          (calYear === currentYear && calMonth === currentMonth && d > currentDay)
-                          
-                        const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-                        const dayTasks = videoTasksThisMonth.filter(t => t.completed_date === dateStr)
-                        const totalDayMinutes = dayTasks.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
-                        
-                        const hasLogged = dayTasks.length > 0
-                        
-                        let cellClasses = ""
-                        let contentColorClasses = ""
-                        let numberColorClass = ""
-                        
-                        if (isFuture) {
-                          cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
-                          numberColorClass = "text-theme-text-muted/40"
-                        } else if (!hasLogged) {
-                          cellClasses = "bg-theme-panel/40 border border-theme-border/50 opacity-60 cursor-default"
-                          numberColorClass = "text-theme-text-muted/60"
-                        } else {
-                          // تدرج اللون الأخضر بناءً على وقت العمل على هذا الفيديو في هذا اليوم
-                          if (totalDayMinutes < 60) {
-                            cellClasses = "bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
-                            contentColorClasses = "text-emerald-600 dark:text-emerald-400"
-                            numberColorClass = "text-emerald-600 dark:text-emerald-400"
-                          } else if (totalDayMinutes >= 60 && totalDayMinutes < 180) {
-                            cellClasses = "bg-emerald-500/20 dark:bg-emerald-500/30 border border-emerald-500/35 hover:bg-emerald-500/40 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
-                            contentColorClasses = "text-emerald-700 dark:text-emerald-300"
-                            numberColorClass = "text-emerald-700 dark:text-emerald-300"
-                          } else {
-                            cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
-                            contentColorClasses = "text-white"
-                            numberColorClass = "text-white"
-                          }
-                        }
+                    <div className="col-span-2 sm:col-span-1 bg-theme-bg/50 border border-theme-border/60 rounded-2xl p-3.5 text-right space-y-1">
+                      <span className="block text-[9px] font-bold text-theme-text-muted">ساعات عمل الفيديو (هذا الشهر)</span>
+                      <h4 className="text-sm sm:text-base font-black text-amber-500 font-mono">
+                        {hoursThisMonth} ساعة
+                      </h4>
+                    </div>
+                  </div>
 
-                        return (
-                          <div
-                            key={d}
-                            onClick={() => !isFuture && hasLogged && handleDayClickLocal(d)}
-                            className={`rounded-2xl p-2 md:p-3 h-24 sm:h-28 md:h-32 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
-                          >
-                            <div className="flex justify-between items-start w-full">
-                              {hasLogged && (
-                                <span className="text-[10px] font-black bg-theme-panel/30 text-theme-text px-1.5 py-0.5 rounded-md">
-                                  {dayTasks.length} {dayTasks.length === 1 ? 'مهمة' : 'مهام'}
-                                </span>
-                              )}
-                              <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
-                                {d}
-                              </span>
-                            </div>
-                            
-                            {hasLogged && (
-                              <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
-                                  <span className="whitespace-nowrap">{formatWorkTimeArabic(totalDayMinutes)}</span>
-                                </div>
-                              </div>
-                            )}
+                  <div className="w-full overflow-x-auto pb-2 scrollbar-thin" dir="rtl">
+                    <div className="min-w-[650px] lg:min-w-0">
+                      {/* أيام الأسبوع */}
+                      <div className="grid grid-cols-7 gap-2 text-center text-[10px] md:text-xs font-bold text-theme-text-muted mb-2">
+                        {weekdays.map(dName => (
+                          <div key={dName} className="py-1">
+                            {dName}
                           </div>
-                        )
-                      })}
+                        ))}
+                      </div>
+
+                      {/* شبكة الأيام */}
+                      <div className="grid grid-cols-7 gap-2">
+                        {emptyCells.map((_, idx) => (
+                          <div 
+                            key={`empty-${idx}`} 
+                            className="bg-transparent border border-transparent rounded-2xl h-24 sm:h-28 md:h-32 opacity-0 pointer-events-none"
+                          />
+                        ))}
+
+                        {daysArray.map(d => {
+                          const isFuture = calYear > currentYear || 
+                            (calYear === currentYear && calMonth > currentMonth) || 
+                            (calYear === currentYear && calMonth === currentMonth && d > currentDay)
+                            
+                          const dateStr = `${calYear}-${String(calMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                          const dayTasks = videoTasksThisMonth.filter(t => t.completed_date === dateStr)
+                          const totalDayMinutes = dayTasks.reduce((sum, t) => sum + (t.work_minutes || 0), 0)
+                          
+                          const hasLogged = dayTasks.length > 0
+                          
+                          let cellClasses = ""
+                          let contentColorClasses = ""
+                          let numberColorClass = ""
+                          
+                          if (isFuture) {
+                            cellClasses = "bg-theme-panel/20 border border-theme-border/30 opacity-40 cursor-default"
+                            numberColorClass = "text-theme-text-muted/40"
+                          } else if (!hasLogged) {
+                            cellClasses = "bg-theme-panel/40 border border-theme-border/50 opacity-60 cursor-default"
+                            numberColorClass = "text-theme-text-muted/60"
+                          } else {
+                            // تدرج اللون الأخضر بناءً على وقت العمل على هذا الفيديو في هذا اليوم
+                            if (totalDayMinutes < 60) {
+                              cellClasses = "bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                              contentColorClasses = "text-emerald-600 dark:text-emerald-400"
+                              numberColorClass = "text-emerald-600 dark:text-emerald-400"
+                            } else if (totalDayMinutes >= 60 && totalDayMinutes < 180) {
+                              cellClasses = "bg-emerald-500/20 dark:bg-emerald-500/30 border border-emerald-500/35 hover:bg-emerald-500/40 transition-all cursor-pointer shadow-xs hover:scale-[1.02]"
+                              contentColorClasses = "text-emerald-700 dark:text-emerald-300"
+                              numberColorClass = "text-emerald-700 dark:text-emerald-300"
+                            } else {
+                              cellClasses = "bg-emerald-600 dark:bg-emerald-700 border border-emerald-600 dark:border-emerald-700 hover:bg-emerald-550 dark:hover:bg-emerald-650 transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                              contentColorClasses = "text-white"
+                              numberColorClass = "text-white"
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={d}
+                              onClick={() => !isFuture && hasLogged && handleDayClickLocal(d)}
+                              className={`rounded-2xl p-2 md:p-3 h-24 sm:h-28 md:h-32 flex flex-col justify-between text-right relative overflow-hidden select-none active:scale-98 ${cellClasses}`}
+                            >
+                              <div className="flex justify-between items-start w-full">
+                                {hasLogged && (
+                                  <span className="text-[10px] font-black bg-theme-panel/30 text-theme-text px-1.5 py-0.5 rounded-md">
+                                    {dayTasks.length} {dayTasks.length === 1 ? 'مهمة' : 'مهام'}
+                                  </span>
+                                )}
+                                <span className={`text-[10px] md:text-xs font-black font-mono ${numberColorClass}`}>
+                                  {d}
+                                </span>
+                              </div>
+                              
+                              {hasLogged && (
+                                <div className={`flex flex-col items-center justify-end gap-0.5 mt-auto text-[9px] md:text-[10px] font-bold ${contentColorClasses}`}>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3 md:w-3.5 md:h-3.5 shrink-0" />
+                                    <span className="whitespace-nowrap">{formatWorkTimeArabic(totalDayMinutes)}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
